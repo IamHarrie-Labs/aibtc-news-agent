@@ -2,8 +2,8 @@
 """
 run_agent.py
 
-Sends scraped sources to Gemini (gemini-2.0-flash) with a structured prompt.
-Gemini researches, fact-checks, and writes the signal in the required format.
+Sends scraped sources to Groq (Llama 3.3 70B) with a structured prompt.
+Groq researches, fact-checks, and writes the signal in the required format.
 The script then submits it to aibtc.news via REST API and logs the result.
 """
 
@@ -14,9 +14,9 @@ import sys
 from datetime import datetime, timezone
 
 try:
-    import google.generativeai as genai
+    from groq import Groq
 except ImportError:
-    print("Missing dep. Run: pip install google-generativeai")
+    print("Missing dep. Run: pip install groq")
     sys.exit(1)
 
 try:
@@ -132,18 +132,16 @@ LOG_ENTRY: [UTC timestamp] | slot {slot} | {beat} | [your headline] | [source UR
 """
 
 
-def call_gemini(prompt: str, api_key: str) -> str:
-    """Call Gemini 2.0 Flash and return the text response."""
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    response = model.generate_content(
-        prompt,
-        generation_config=genai.types.GenerationConfig(
-            temperature=0.4,
-            max_output_tokens=2048,
-        )
+def call_groq(prompt: str, api_key: str) -> str:
+    """Call Groq Llama 3.3 70B and return the text response."""
+    client = Groq(api_key=api_key)
+    message = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.4,
+        max_tokens=2048,
     )
-    return response.text
+    return message.choices[0].message.content
 
 
 def submit_signal(headline: str, summary: str, source_url: str, beat: str,
@@ -172,7 +170,7 @@ def submit_signal(headline: str, summary: str, source_url: str, beat: str,
 
 
 def parse_signal(output: str) -> dict:
-    """Extract structured fields from Gemini's output."""
+    """Extract structured fields from Groq's output."""
     signal = {"headline": "", "summary": "", "source": "", "beat": "", "tags": []}
     lines = output.splitlines()
     summary_lines = []
@@ -228,9 +226,9 @@ def main():
     parser.add_argument("--log",           type=str, default="news-log.md")
     args = parser.parse_args()
 
-    api_key = os.environ.get("GEMINI_API_KEY", "")
+    api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key:
-        print("[error] GEMINI_API_KEY not set.")
+        print("[error] GROQ_API_KEY not set.")
         sys.exit(1)
 
     # Safety: cap at 12 signals per UTC day
@@ -259,14 +257,14 @@ def main():
         articles=articles,
     )
 
-    print("Sending prompt to Gemini 2.0 Flash...")
+    print("Sending prompt to Groq (Llama 3.3 70B)...")
     try:
-        output = call_gemini(prompt, api_key)
+        output = call_groq(prompt, api_key)
     except Exception as e:
-        print(f"[error] Gemini API call failed: {e}")
+        print(f"[error] Groq API call failed: {e}")
         sys.exit(1)
 
-    print("\n--- Gemini output ---")
+    print("\n--- Groq output ---")
     print(output[:3000])
 
     # Extract LOG_ENTRY

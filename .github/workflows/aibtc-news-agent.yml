@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 20
 
     env:
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       BTC_ADDRESS: ${{ secrets.BTC_ADDRESS }}
       STX_ADDRESS: ${{ secrets.STX_ADDRESS }}
       WALLET_PASSWORD: ${{ secrets.WALLET_PASSWORD }}
@@ -51,7 +51,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install google-generativeai requests feedparser --quiet
+          pip install groq requests feedparser --quiet
 
       - name: Detect slot from UTC hour
         id: slot
