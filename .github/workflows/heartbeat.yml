@@ -5,11 +5,6 @@ on:
     # Every 4 minutes (within AIBTC's 5-min window)
     - cron: "*/4 * * * *"
   workflow_dispatch:
-    inputs:
-      test_mode:
-        description: "Test mode (no API call, just log)"
-        required: false
-        default: "false"
 
 permissions:
   contents: read
@@ -21,27 +16,16 @@ jobs:
 
     env:
       BTC_ADDRESS: ${{ secrets.BTC_ADDRESS }}
-      WALLET_PASSWORD: ${{ secrets.WALLET_PASSWORD }}
-      WALLET_ENCRYPTED: ${{ secrets.WALLET_ENCRYPTED }}
       WALLET_MNEMONIC: ${{ secrets.WALLET_MNEMONIC }}
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Install dependencies
-        run: |
-          npm install -g @aibtc/mcp-server@latest
-
-      - name: Create wallet file
-        run: |
-          mkdir -p ~/.aibtc/wallets/e0704dea-0eca-4a02-a964-b7259606cbc1
-          echo "${{ secrets.WALLET_ENCRYPTED }}" | base64 -d > ~/.aibtc/wallets/e0704dea-0eca-4a02-a964-b7259606cbc1/keystore.json
+      - name: Install MCP server
+        run: npm install -g @aibtc/mcp-server@latest
 
       - name: Send heartbeat
         run: |
@@ -51,77 +35,111 @@ jobs:
           const readline = require('readline');
 
           const BTC_ADDRESS = process.env.BTC_ADDRESS;
-          const WALLET_PASSWORD = process.env.WALLET_PASSWORD;
           const WALLET_MNEMONIC = process.env.WALLET_MNEMONIC;
-          const WALLET_ID = '3171556e-bdd2-4e35-a1df-3f6f025ed9b7';
 
-          async function mcpSingleCall(tool, args) {
-            return new Promise((resolve) => {
-              // Use globally installed binary - avoids npx re-download delay
-              const proc = spawn('aibtc-mcp-server', [], {
-                stdio: ['pipe', 'pipe', 'pipe'],
-                env: { ...process.env, CLIENT_MNEMONIC: WALLET_MNEMONIC }
-              });
-
-              let output = '';
-              const rl = readline.createInterface({ input: proc.stdout });
-              rl.on('line', (l) => { output += l + '\n'; });
-              proc.stderr.on('data', (d) => {
-                process.stderr.write(d); // Show MCP server logs
-              });
-
-              // Server is already installed, starts in ~100ms
-              setTimeout(() => {
-                proc.stdin.write(JSON.stringify({
-                  jsonrpc: '2.0', id: 0, method: 'initialize',
-                  params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'serene-spring', version: '1' } }
-                }) + '\n');
-              }, 300);
-
-              setTimeout(() => {
-                proc.stdin.write(JSON.stringify({
-                  jsonrpc: '2.0', id: 1, method: 'tools/call',
-                  params: { name: tool, arguments: args || {} }
-                }) + '\n');
-              }, 800);
-
-              // Give 6s for tool response before kill
-              setTimeout(() => { proc.kill(); resolve(output); }, 6000);
-            });
-          }
-
-          async function heartbeat() {
+          // Use promise-based MCP client that keeps one connection open
+          async function runHeartbeat() {
             const ts = new Date().toISOString();
             const msg = `AIBTC Check-In | ${ts}`;
+            console.log(`[${ts}] Starting...`);
 
-            console.log(`[${ts}] Starting heartbeat...`);
+            const result = await new Promise((resolve, reject) => {
+              const proc = spawn('aibtc-mcp-server', [], {
+                stdio: ['pipe', 'pipe', 'pipe'],
+                env: {
+                  ...process.env,
+                  NETWORK: 'mainnet',
+                  CLIENT_MNEMONIC: WALLET_MNEMONIC
+                }
+              });
 
-            // 1. Unlock wallet
-            const unlockOut = await mcpSingleCall('wallet_unlock', { walletId: WALLET_ID, password: WALLET_PASSWORD });
-            if (unlockOut.includes('"isError":true') || !unlockOut.includes('"result"')) {
-              console.error(`[${ts}] ❌ Unlock failed`);
-              console.error(`Unlock output: ${unlockOut.slice(0, 500)}`);
-              process.exit(1);
-            }
-            console.log(`[${ts}] ✓ Wallet unlocked`);
+              proc.stderr.on('data', d => process.stderr.write(d));
 
-            // 2. Sign message
-            const sigOut = await mcpSingleCall('btc_sign_message', { message: msg });
-            // Try both JSON escape formats for signature
-            let sigMatch = sigOut.match(/signature.*?\\"([^\\"]+)\\"/) ||
-                           sigOut.match(/"signature"\s*:\s*"([^"]+)"/);
-            if (!sigMatch) {
-              console.error(`[${ts}] ❌ Sign failed`);
-              console.error(`Sign output: ${sigOut.slice(0, 500)}`);
-              process.exit(1);
-            }
-            const signature = sigMatch[1];
-            console.log(`[${ts}] ✓ Message signed (${signature.substring(0,20)}...)`);
+              let output = '';
+              let reqId = 1;
+              const pending = {};
 
-            // 3. Send heartbeat to API
+              function send(method, params) {
+                return new Promise((res, rej) => {
+                  const id = reqId++;
+                  pending[id] = { res, rej };
+                  proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+                  setTimeout(() => {
+                    if (pending[id]) { delete pending[id]; rej(new Error(`Timeout: ${method}`)); }
+                  }, 8000);
+                });
+              }
+
+              const rl = readline.createInterface({ input: proc.stdout });
+              rl.on('line', (line) => {
+                if (!line.trim() || !line.startsWith('{')) return;
+                try {
+                  const msg = JSON.parse(line);
+                  if (msg.id && pending[msg.id]) {
+                    pending[msg.id].res(msg.result || msg);
+                    delete pending[msg.id];
+                  }
+                } catch(e) {}
+              });
+
+              proc.on('error', reject);
+
+              // Run sequence after server starts
+              setTimeout(async () => {
+                try {
+                  // 1. Initialize
+                  await send('initialize', {
+                    protocolVersion: '2024-11-05',
+                    capabilities: {},
+                    clientInfo: { name: 'serene-spring', version: '1' }
+                  });
+                  await send('notifications/initialized', {});
+                  console.log('[mcp] Initialized');
+
+                  // 2. Import wallet from mnemonic
+                  const imported = await send('tools/call', {
+                    name: 'wallet_import',
+                    arguments: { name: 'serene-spring', mnemonic: WALLET_MNEMONIC }
+                  });
+                  console.log('[mcp] Wallet imported');
+
+                  // 3. Sign message
+                  const signResult = await send('tools/call', {
+                    name: 'btc_sign_message',
+                    arguments: { message: msg }
+                  });
+
+                  const text = signResult?.content?.[0]?.text || '';
+                  const sigMatch = text.match(/"signature"\s*:\s*"([^"]+)"/) ||
+                                   text.match(/signature.*?\\"([^\\"]+)\\"/);
+
+                  if (!sigMatch) {
+                    console.error('[mcp] Sign output:', text.slice(0, 300));
+                    throw new Error('No signature in response');
+                  }
+
+                  proc.kill();
+                  resolve({ signature: sigMatch[1], ts });
+                } catch(err) {
+                  proc.kill();
+                  reject(err);
+                }
+              }, 400);
+
+              setTimeout(() => {
+                if (Object.keys(pending).length > 0) {
+                  proc.kill();
+                  reject(new Error('Overall timeout'));
+                }
+              }, 25000);
+            });
+
+            console.log(`[${result.ts}] Signed (${result.signature.substring(0,20)}...)`);
+
+            // POST to heartbeat API
             const payload = JSON.stringify({
-              signature: signature,
-              timestamp: ts,
+              signature: result.signature,
+              timestamp: result.ts,
               btcAddress: BTC_ADDRESS
             });
 
@@ -141,34 +159,30 @@ jobs:
                   try {
                     const r = JSON.parse(data);
                     if (r.success) {
-                      const count = r.checkIn?.checkInCount || '?';
-                      console.log(`[${ts}] ✓ Heartbeat OK - checkInCount: ${count}`);
+                      console.log(`[${result.ts}] ✓ checkInCount: ${r.checkIn?.checkInCount || '?'}`);
                       resolve(true);
                     } else {
-                      console.error(`[${ts}] ⚠️  ${r.error?.message || r.error || 'Unknown error'}`);
+                      console.error(`[${result.ts}] ⚠️ ${r.error?.message || JSON.stringify(r.error)}`);
                       resolve(false);
                     }
-                  } catch (e) {
-                    console.error(`[${ts}] ❌ Invalid response: ${data.slice(0, 200)}`);
+                  } catch(e) {
+                    console.error(`Invalid response: ${data.slice(0, 300)}`);
                     resolve(false);
                   }
                 });
               });
-
-              req.on('error', e => {
-                console.error(`[${ts}] ❌ Request error: ${e.message}`);
-                resolve(false);
-              });
-
+              req.on('error', e => { console.error(e.message); resolve(false); });
               req.write(payload);
               req.end();
             });
           }
 
-          heartbeat().then(ok => process.exit(ok ? 0 : 1));
+          runHeartbeat().then(ok => process.exit(ok ? 0 : 1)).catch(err => {
+            console.error('Fatal:', err.message);
+            process.exit(1);
+          });
           EOF
 
       - name: Log summary
         if: always()
-        run: |
-          echo "Heartbeat run complete at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+        run: echo "Heartbeat run complete at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
