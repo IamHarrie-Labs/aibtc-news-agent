@@ -23,6 +23,7 @@ jobs:
       BTC_ADDRESS: ${{ secrets.BTC_ADDRESS }}
       WALLET_PASSWORD: ${{ secrets.WALLET_PASSWORD }}
       WALLET_ENCRYPTED: ${{ secrets.WALLET_ENCRYPTED }}
+      WALLET_MNEMONIC: ${{ secrets.WALLET_MNEMONIC }}
 
     steps:
       - name: Checkout repo
@@ -51,55 +52,36 @@ jobs:
 
           const BTC_ADDRESS = process.env.BTC_ADDRESS;
           const WALLET_PASSWORD = process.env.WALLET_PASSWORD;
-          const WALLET_ENCRYPTED = process.env.WALLET_ENCRYPTED;
+          const WALLET_MNEMONIC = process.env.WALLET_MNEMONIC;
           const WALLET_ID = 'e0704dea-0eca-4a02-a964-b7259606cbc1';
-
-          // Get mnemonic from wallet keystore (will be set after wallet file created)
-          const MNEMONIC = 'dummy'; // We don't actually need this - we unlock with password
 
           async function mcpSingleCall(tool, args) {
             return new Promise((resolve) => {
-              // Try to use the globally installed MCP server
-              const proc = spawn('bash', ['-c', '@aibtc/mcp-server'], {
-                stdio: ['pipe', 'pipe', 'inherit'],
-                env: { ...process.env, NETWORK: 'mainnet' }
+              const proc = spawn('npx', ['@aibtc/mcp-server@latest'], {
+                stdio: ['pipe', 'pipe', 'pipe'],
+                env: { ...process.env, CLIENT_MNEMONIC: WALLET_MNEMONIC }
               });
 
               let output = '';
-              proc.stdout.on('data', (d) => {
-                output += d.toString();
-                console.log(`[mcp-${tool}] stdout:`, d.toString().slice(0, 150));
-              });
+              const rl = readline.createInterface({ input: proc.stdout });
+              rl.on('line', (l) => { output += l + '\n'; });
+              proc.stderr.on('data', () => {});
 
               setTimeout(() => {
-                console.log(`[mcp-${tool}] Sending init...`);
                 proc.stdin.write(JSON.stringify({
-                  jsonrpc: '2.0',
-                  id: 0,
-                  method: 'initialize',
-                  params: {
-                    protocolVersion: '2024-11-05',
-                    capabilities: {},
-                    clientInfo: { name: 'serene-spring', version: '1' }
-                  }
+                  jsonrpc: '2.0', id: 0, method: 'initialize',
+                  params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'serene-spring', version: '1' } }
                 }) + '\n');
               }, 500);
 
               setTimeout(() => {
-                console.log(`[mcp-${tool}] Sending tool call...`);
                 proc.stdin.write(JSON.stringify({
-                  jsonrpc: '2.0',
-                  id: 1,
-                  method: 'tools/call',
+                  jsonrpc: '2.0', id: 1, method: 'tools/call',
                   params: { name: tool, arguments: args || {} }
                 }) + '\n');
               }, 1200);
 
-              setTimeout(() => {
-                console.log(`[mcp-${tool}] Killing process, output length: ${output.length}`);
-                proc.kill();
-                resolve(output);
-              }, 5000);
+              setTimeout(() => { proc.kill(); resolve(output); }, 5000);
             });
           }
 
