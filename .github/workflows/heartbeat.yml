@@ -73,7 +73,9 @@ jobs:
           let unlocked = false;
 
           proc.stdout.on('data', (data) => {
-            out += data.toString();
+            const chunk = data.toString();
+            out += chunk;
+            console.log('[mcp-stdout]', chunk.slice(0, 100));
 
             // Check for unlock success text
             if (!unlocked && out.includes('unlocked successfully')) {
@@ -93,7 +95,8 @@ jobs:
           });
 
           proc.stderr.on('data', (data) => {
-            console.error('[mcp-stderr]', data.toString().slice(0, 200));
+            const chunk = data.toString();
+            console.error('[mcp-stderr]', chunk.slice(0, 200));
           });
 
           proc.on('close', () => {
