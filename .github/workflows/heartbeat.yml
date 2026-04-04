@@ -57,7 +57,8 @@ jobs:
 
           async function mcpSingleCall(tool, args) {
             return new Promise((resolve) => {
-              const proc = spawn('npx', ['@aibtc/mcp-server@latest'], {
+              // Use globally installed binary - avoids npx re-download delay
+              const proc = spawn('aibtc-mcp-server', [], {
                 stdio: ['pipe', 'pipe', 'pipe'],
                 env: { ...process.env, CLIENT_MNEMONIC: WALLET_MNEMONIC }
               });
@@ -65,23 +66,27 @@ jobs:
               let output = '';
               const rl = readline.createInterface({ input: proc.stdout });
               rl.on('line', (l) => { output += l + '\n'; });
-              proc.stderr.on('data', () => {});
+              proc.stderr.on('data', (d) => {
+                process.stderr.write(d); // Show MCP server logs
+              });
 
+              // Server is already installed, starts in ~100ms
               setTimeout(() => {
                 proc.stdin.write(JSON.stringify({
                   jsonrpc: '2.0', id: 0, method: 'initialize',
                   params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'serene-spring', version: '1' } }
                 }) + '\n');
-              }, 500);
+              }, 300);
 
               setTimeout(() => {
                 proc.stdin.write(JSON.stringify({
                   jsonrpc: '2.0', id: 1, method: 'tools/call',
                   params: { name: tool, arguments: args || {} }
                 }) + '\n');
-              }, 1200);
+              }, 800);
 
-              setTimeout(() => { proc.kill(); resolve(output); }, 5000);
+              // Give 6s for tool response before kill
+              setTimeout(() => { proc.kill(); resolve(output); }, 6000);
             });
           }
 
