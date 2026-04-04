@@ -43,205 +43,134 @@ jobs:
           echo "${{ secrets.WALLET_ENCRYPTED }}" | base64 -d > ~/.aibtc/wallets/e0704dea-0eca-4a02-a964-b7259606cbc1/keystore.json
 
       - name: Send heartbeat
-        timeout-minutes: 1
         run: |
           node - <<'EOF'
           const https = require('https');
           const { spawn } = require('child_process');
+          const readline = require('readline');
 
           const BTC_ADDRESS = process.env.BTC_ADDRESS;
           const WALLET_PASSWORD = process.env.WALLET_PASSWORD;
+          const WALLET_ENCRYPTED = process.env.WALLET_ENCRYPTED;
           const WALLET_ID = 'e0704dea-0eca-4a02-a964-b7259606cbc1';
-          const TEST_MODE = process.env.TEST_MODE === 'true';
 
-          const now = new Date().toISOString();
-          const message = `AIBTC Check-In | ${now}`;
+          // Get mnemonic from wallet keystore (will be set after wallet file created)
+          const MNEMONIC = 'dummy'; // We don't actually need this - we unlock with password
 
-          console.log(`[heartbeat] ${now}`);
-          console.log(`[heartbeat] Message: ${message}`);
+          async function mcpSingleCall(tool, args) {
+            return new Promise((resolve) => {
+              const proc = spawn('npx', ['@aibtc/mcp-server@latest'], {
+                stdio: ['pipe', 'pipe', 'pipe'],
+                env: { ...process.env, NETWORK: 'mainnet' }
+              });
 
-          if (TEST_MODE) {
-            console.log('[heartbeat] TEST MODE - skipping API call');
-            process.exit(0);
+              let output = '';
+              const rl = readline.createInterface({ input: proc.stdout });
+              rl.on('line', (l) => { output += l + '\n'; });
+              proc.stderr.on('data', () => {});
+
+              setTimeout(() => {
+                proc.stdin.write(JSON.stringify({
+                  jsonrpc: '2.0',
+                  id: 0,
+                  method: 'initialize',
+                  params: {
+                    protocolVersion: '2024-11-05',
+                    capabilities: {},
+                    clientInfo: { name: 'serene-spring', version: '1' }
+                  }
+                }) + '\n');
+              }, 500);
+
+              setTimeout(() => {
+                proc.stdin.write(JSON.stringify({
+                  jsonrpc: '2.0',
+                  id: 1,
+                  method: 'tools/call',
+                  params: { name: tool, arguments: args || {} }
+                }) + '\n');
+              }, 1200);
+
+              setTimeout(() => {
+                proc.kill();
+                resolve(output);
+              }, 5000);
+            });
           }
 
-          const proc = spawn('npx', ['@aibtc/mcp-server@latest'], {
-            env: { ...process.env, NETWORK: 'mainnet' },
-            stdio: ['pipe', 'pipe', 'pipe']
-          });
+          async function heartbeat() {
+            const ts = new Date().toISOString();
+            const msg = `AIBTC Check-In | ${ts}`;
 
-          let out = '';
-          let unlocked = false;
-          let initSent = false;
-          let unlockSent = false;
+            console.log(`[${ts}] Starting heartbeat...`);
 
-          proc.stdout.on('data', (data) => {
-            const chunk = data.toString();
-            out += chunk;
-
-            // Parse each complete JSON line
-            const lines = chunk.split('\n');
-            for (const line of lines) {
-              if (line.trim()) {
-                console.log('[mcp-line]', line.slice(0, 150));
-                try {
-                  const parsed = JSON.parse(line);
-                  // Check for any response with id 1 (unlock)
-                  if (!unlocked && parsed.id === 1) {
-                    unlocked = true;
-                    console.log('[mcp] Got response to unlock request');
-                    // Send sign request
-                    proc.stdin.write(JSON.stringify({
-                      jsonrpc: '2.0',
-                      id: 2,
-                      method: 'tools/call',
-                      params: {
-                        name: 'btc_sign_message',
-                        arguments: { message: message }
-                      }
-                    }) + '\n');
-                  }
-                } catch (e) {
-                  // Not JSON, might be log output
-                  if (!unlocked && line.includes('unlocked successfully')) {
-                    unlocked = true;
-                    console.log('[mcp] Wallet unlocked (text match)');
-                    proc.stdin.write(JSON.stringify({
-                      jsonrpc: '2.0',
-                      id: 2,
-                      method: 'tools/call',
-                      params: {
-                        name: 'btc_sign_message',
-                        arguments: { message: message }
-                      }
-                    }) + '\n');
-                  }
-                }
-              }
+            // 1. Unlock wallet
+            const unlockOut = await mcpSingleCall('wallet_unlock', { walletId: WALLET_ID, password: WALLET_PASSWORD });
+            if (!unlockOut.includes('Wallet unlocked successfully')) {
+              console.error(`[${ts}] ❌ Unlock failed`);
+              console.error(`Unlock output: ${unlockOut.slice(0, 500)}`);
+              process.exit(1);
             }
-          });
+            console.log(`[${ts}] ✓ Wallet unlocked`);
 
-          proc.stderr.on('data', (data) => {
-            const chunk = data.toString();
-            console.error('[mcp-stderr]', chunk.slice(0, 200));
-          });
-
-          proc.on('close', () => {
-            // Parse all output lines to find signature
-            const lines = out.split('\n');
-            for (const line of lines) {
-              try {
-                const j = JSON.parse(line);
-                if (j.id === 2 && j.result) {
-                  const text = j.result?.content?.[0]?.text;
-                  if (text) {
-                    const inner = JSON.parse(text);
-                    if (inner.signature) {
-                      const sig = inner.signature;
-                      console.log(`[mcp] Signature captured (${sig.substring(0, 20)}...)`);
-                      sendHeartbeat(sig, now);
-                      return;
-                    }
-                  }
-                }
-              } catch (e) {}
+            // 2. Sign message
+            const sigOut = await mcpSingleCall('btc_sign_message', { message: msg });
+            const sigMatch = sigOut.match(/signature.*?\\"([^\\"]+)\\"/);
+            if (!sigMatch) {
+              console.error(`[${ts}] ❌ Sign failed`);
+              console.error(`Sign output: ${sigOut.slice(0, 500)}`);
+              process.exit(1);
             }
-            console.error('[heartbeat] Failed to get signature');
-            process.exit(1);
-          });
+            console.log(`[${ts}] ✓ Message signed`);
 
-          // Send initialize after waiting for server startup
-          setTimeout(() => {
-            console.log('[mcp] Sending initialize...');
-            initSent = true;
-            proc.stdin.write(JSON.stringify({
-              jsonrpc: '2.0',
-              id: 0,
-              method: 'initialize',
-              params: {
-                protocolVersion: '2024-11-05',
-                capabilities: {},
-                clientInfo: { name: 'serene-spring-heartbeat', version: '1.0' }
-              }
-            }) + '\n');
-          }, 1000);
-
-          // Send unlock after server processes initialize
-          setTimeout(() => {
-            console.log('[mcp] Sending unlock...');
-            unlockSent = true;
-            proc.stdin.write(JSON.stringify({
-              jsonrpc: '2.0',
-              id: 1,
-              method: 'tools/call',
-              params: {
-                name: 'wallet_unlock',
-                arguments: { walletId: WALLET_ID, password: WALLET_PASSWORD }
-              }
-            }) + '\n');
-          }, 2000);
-
-          // Timeout protection
-          setTimeout(() => {
-            console.error('[heartbeat] MCP timeout after 30s');
-            proc.kill();
-            process.exit(1);
-          }, 30000);
-
-          function sendHeartbeat(signature, timestamp) {
+            // 3. Send heartbeat to API
             const payload = JSON.stringify({
-              signature: signature,
-              timestamp: timestamp,
+              signature: sigMatch[1],
+              timestamp: ts,
               btcAddress: BTC_ADDRESS
             });
 
-            const options = {
-              hostname: 'aibtc.com',
-              path: '/api/heartbeat',
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': payload.length
-              }
-            };
-
-            console.log('[api] Sending heartbeat to aibtc.com/api/heartbeat');
-
-            const req = https.request(options, (res) => {
-              let data = '';
-              res.on('data', chunk => { data += chunk; });
-              res.on('end', () => {
-                try {
-                  const parsed = JSON.parse(data);
-                  if (parsed.success) {
-                    const count = parsed.checkIn?.checkInCount || '?';
-                    console.log(`[api] ✓ Heartbeat OK - checkInCount: ${count}`);
-                    process.exit(0);
-                  } else {
-                    console.error('[api] Heartbeat failed:', parsed.error || 'unknown error');
-                    process.exit(1);
-                  }
-                } catch (e) {
-                  console.error('[api] Invalid response:', data.slice(0, 200));
-                  process.exit(1);
+            return new Promise((resolve) => {
+              const req = https.request({
+                hostname: 'aibtc.com',
+                path: '/api/heartbeat',
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(payload)
                 }
+              }, (res) => {
+                let data = '';
+                res.on('data', c => data += c);
+                res.on('end', () => {
+                  try {
+                    const r = JSON.parse(data);
+                    if (r.success) {
+                      const count = r.checkIn?.checkInCount || '?';
+                      console.log(`[${ts}] ✓ Heartbeat OK - checkInCount: ${count}`);
+                      resolve(true);
+                    } else {
+                      console.error(`[${ts}] ⚠️  ${r.error?.message || r.error || 'Unknown error'}`);
+                      resolve(false);
+                    }
+                  } catch (e) {
+                    console.error(`[${ts}] ❌ Invalid response: ${data.slice(0, 200)}`);
+                    resolve(false);
+                  }
+                });
               });
+
+              req.on('error', e => {
+                console.error(`[${ts}] ❌ Request error: ${e.message}`);
+                resolve(false);
+              });
+
+              req.write(payload);
+              req.end();
             });
-
-            req.on('error', (e) => {
-              console.error('[api] Request error:', e.message);
-              process.exit(1);
-            });
-
-            req.write(payload);
-            req.end();
-
-            // Timeout protection
-            setTimeout(() => {
-              console.error('[api] Timeout after 20s');
-              process.exit(1);
-            }, 20000);
           }
+
+          heartbeat().then(ok => process.exit(ok ? 0 : 1));
           EOF
 
       - name: Log summary
