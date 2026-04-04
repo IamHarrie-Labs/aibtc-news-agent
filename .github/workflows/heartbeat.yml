@@ -1,0 +1,227 @@
+name: Serene Spring Heartbeat
+
+on:
+  schedule:
+    # Every 4 minutes (within AIBTC's 5-min window)
+    - cron: "*/4 * * * *"
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: "Test mode (no API call, just log)"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    env:
+      BTC_ADDRESS: ${{ secrets.BTC_ADDRESS }}
+      WALLET_PASSWORD: ${{ secrets.WALLET_PASSWORD }}
+      WALLET_ENCRYPTED: ${{ secrets.WALLET_ENCRYPTED }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          npm install -g @aibtc/mcp-server@latest
+          npm install
+
+      - name: Create wallet file
+        run: |
+          mkdir -p ~/.aibtc/wallets/e0704dea-0eca-4a02-a964-b7259606cbc1
+          echo "${{ secrets.WALLET_ENCRYPTED }}" | base64 -d > ~/.aibtc/wallets/e0704dea-0eca-4a02-a964-b7259606cbc1/keystore.json
+
+      - name: Send heartbeat
+        run: |
+          node - <<'EOF'
+          const https = require('https');
+          const { spawn } = require('child_process');
+
+          const BTC_ADDRESS = process.env.BTC_ADDRESS;
+          const WALLET_PASSWORD = process.env.WALLET_PASSWORD;
+          const WALLET_ID = 'e0704dea-0eca-4a02-a964-b7259606cbc1';
+          const TEST_MODE = process.env.TEST_MODE === 'true';
+
+          // Message to sign
+          const now = new Date().toISOString();
+          const message = `AIBTC Check-In | ${now}`;
+
+          console.log(`[heartbeat] ${now}`);
+          console.log(`[heartbeat] Message: ${message}`);
+
+          if (TEST_MODE) {
+            console.log('[heartbeat] TEST MODE - skipping API call');
+            process.exit(0);
+          }
+
+          // Spawn MCP server
+          const proc = spawn('npx', ['@aibtc/mcp-server@latest'], {
+            env: { ...process.env, NETWORK: 'mainnet' },
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+
+          let buffer = '';
+          let requestId = 0;
+          let signatureCaptured = false;
+
+          proc.stdout.on('data', (data) => {
+            buffer += data.toString();
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (!line.trim()) continue;
+
+              try {
+                const parsed = JSON.parse(line);
+
+                // Handle initialize response
+                if (parsed.id === 0) {
+                  console.log('[mcp] Initialized');
+                  // Send unlock
+                  proc.stdin.write(JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method: 'tools/call',
+                    params: {
+                      name: 'wallet_unlock',
+                      arguments: { walletId: WALLET_ID, password: WALLET_PASSWORD }
+                    }
+                  }) + '\n');
+                }
+
+                // Handle unlock response
+                else if (parsed.id === 1) {
+                  console.log('[mcp] Wallet unlocked');
+                  // Send sign request
+                  proc.stdin.write(JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: 2,
+                    method: 'tools/call',
+                    params: {
+                      name: 'btc_sign_message',
+                      arguments: { message: message }
+                    }
+                  }) + '\n');
+                }
+
+                // Handle sign response
+                else if (parsed.id === 2 && parsed.result) {
+                  const text = parsed.result?.content?.[0]?.text;
+                  if (text) {
+                    const signResult = JSON.parse(text);
+                    const signature = signResult.signature;
+                    console.log(`[mcp] Signature captured (${signature.substring(0, 20)}...)`);
+                    signatureCaptured = true;
+                    proc.kill();
+
+                    // Send heartbeat API call
+                    sendHeartbeat(signature, now);
+                  }
+                }
+              } catch (e) {
+                // Not JSON, skip
+              }
+            }
+          });
+
+          proc.stderr.on('data', (data) => {
+            console.error('[mcp-stderr]', data.toString().slice(0, 200));
+          });
+
+          proc.on('error', (err) => {
+            console.error('[mcp-error]', err.message);
+            process.exit(1);
+          });
+
+          // Send initialize
+          proc.stdin.write(JSON.stringify({
+            jsonrpc: '2.0',
+            id: 0,
+            method: 'initialize',
+            params: {
+              protocolVersion: '2024-11-05',
+              capabilities: {},
+              clientInfo: { name: 'serene-spring-heartbeat', version: '1.0' }
+            }
+          }) + '\n');
+
+          // Timeout protection
+          setTimeout(() => {
+            console.error('[heartbeat] MCP timeout after 30s');
+            proc.kill();
+            process.exit(1);
+          }, 30000);
+
+          function sendHeartbeat(signature, timestamp) {
+            const payload = JSON.stringify({
+              signature: signature,
+              timestamp: timestamp,
+              btcAddress: BTC_ADDRESS
+            });
+
+            const options = {
+              hostname: 'aibtc.com',
+              path: '/api/heartbeat',
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': payload.length
+              }
+            };
+
+            console.log('[api] Sending heartbeat to aibtc.com/api/heartbeat');
+
+            const req = https.request(options, (res) => {
+              let data = '';
+              res.on('data', chunk => { data += chunk; });
+              res.on('end', () => {
+                try {
+                  const parsed = JSON.parse(data);
+                  if (parsed.success) {
+                    const count = parsed.checkIn?.checkInCount || '?';
+                    console.log(`[api] ✓ Heartbeat OK - checkInCount: ${count}`);
+                    process.exit(0);
+                  } else {
+                    console.error('[api] Heartbeat failed:', parsed.error || 'unknown error');
+                    process.exit(1);
+                  }
+                } catch (e) {
+                  console.error('[api] Invalid response:', data.slice(0, 200));
+                  process.exit(1);
+                }
+              });
+            });
+
+            req.on('error', (e) => {
+              console.error('[api] Request error:', e.message);
+              process.exit(1);
+            });
+
+            req.write(payload);
+            req.end();
+
+            // Timeout protection
+            setTimeout(() => {
+              console.error('[api] Timeout after 20s');
+              process.exit(1);
+            }, 20000);
+          }
+          EOF
+
+      - name: Log summary
+        if: always()
+        run: |
+          echo "Heartbeat run complete at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
