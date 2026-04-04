@@ -97,24 +97,24 @@ jobs:
                   await send('notifications/initialized', {});
                   console.log('[mcp] Initialized');
 
-                  // 2. Import wallet from mnemonic, extract wallet ID
-                  const imported = await send('tools/call', {
+                  // 2. Import wallet from mnemonic (password required, min 8 chars)
+                  await send('tools/call', {
                     name: 'wallet_import',
-                    arguments: { name: 'serene-spring', mnemonic: WALLET_MNEMONIC }
+                    arguments: {
+                      name: 'serene-spring',
+                      mnemonic: WALLET_MNEMONIC,
+                      password: process.env.WALLET_PASSWORD,
+                      network: 'mainnet'
+                    }
                   });
-                  const importText = imported?.content?.[0]?.text || '';
-                  const walletIdMatch = importText.match(/"id"\s*:\s*"([^"]+)"/);
-                  const walletId = walletIdMatch ? walletIdMatch[1] : null;
-                  console.log('[mcp] Wallet imported, id:', walletId || '(not found in: ' + importText.slice(0,100) + ')');
+                  console.log('[mcp] Wallet imported');
 
-                  // 3. Unlock the wallet
-                  if (walletId) {
-                    await send('tools/call', {
-                      name: 'wallet_unlock',
-                      arguments: { walletId, password: process.env.WALLET_PASSWORD || 'lesh1234' }
-                    });
-                    console.log('[mcp] Wallet unlocked');
-                  }
+                  // 3. Unlock active wallet (no walletId needed)
+                  await send('tools/call', {
+                    name: 'wallet_unlock',
+                    arguments: { password: process.env.WALLET_PASSWORD }
+                  });
+                  console.log('[mcp] Wallet unlocked');
 
                   // 4. Sign message
                   const signResult = await send('tools/call', {
