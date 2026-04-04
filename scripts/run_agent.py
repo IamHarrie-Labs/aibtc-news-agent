@@ -143,7 +143,7 @@ def submit_via_claude_cli(prompt: str, log_path: str) -> bool:
 
     try:
         result = subprocess.run(
-            ["claude", "--print", prompt],
+            ["claude", "--dangerously-skip-permissions", "--print", prompt],
             capture_output=True,
             text=True,
             timeout=600,  # 10 min max

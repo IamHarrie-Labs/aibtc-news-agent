@@ -42,8 +42,16 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install -g @aibtc/mcp-server@latest
+          npm install -g @anthropic-ai/claude-code @aibtc/mcp-server@latest
+          npx @aibtc/mcp-server@latest --install
           pip install anthropic requests feedparser --quiet
+
+      - name: Restore wallet
+        run: |
+          mkdir -p ~/.aibtc/wallets/e0704dea-0eca-4a02-a964-b7259606cbc1
+          echo '${{ secrets.WALLET_CONFIG_JSON }}' > ~/.aibtc/config.json
+          echo '${{ secrets.WALLET_INDEX_JSON }}' > ~/.aibtc/wallets.json
+          echo '${{ secrets.WALLET_KEYSTORE_JSON }}' > ~/.aibtc/wallets/e0704dea-0eca-4a02-a964-b7259606cbc1/keystore.json
 
       - name: Detect slot from UTC hour
         id: slot
