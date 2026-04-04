@@ -1,0 +1,92 @@
+name: AIBTC News Agent
+
+on:
+  schedule:
+    # 6 slots per UTC day — matches the signal schedule exactly
+    - cron: "0 6 * * *"   # slot 1 — arxiv-research
+    - cron: "0 9 * * *"   # slot 2 — beat primary skill
+    - cron: "0 12 * * *"  # slot 3 — tenero + query
+    - cron: "0 15 * * *"  # slot 4 — beat primary skill
+    - cron: "0 18 * * *"  # slot 5 — aibtc-news-scout
+    - cron: "0 21 * * *"  # slot 6 — aibtc-news-deal-flow
+  workflow_dispatch:
+    inputs:
+      slot_override:
+        description: "Force a specific slot (1–6). Leave blank to auto-detect from UTC hour."
+        required: false
+        default: ""
+
+jobs:
+  file-signal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      BTC_ADDRESS: ${{ secrets.BTC_ADDRESS }}
+      STX_ADDRESS: ${{ secrets.STX_ADDRESS }}
+      WALLET_PASSWORD: ${{ secrets.WALLET_PASSWORD }}
+      AGENT_BEAT: ${{ secrets.AGENT_BEAT }}
+      AGENT_PRIMARY_SKILL: ${{ secrets.AGENT_PRIMARY_SKILL }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          npm install -g @aibtc/mcp-server@latest
+          pip install anthropic requests feedparser --quiet
+
+      - name: Detect slot from UTC hour
+        id: slot
+        run: |
+          if [ -n "${{ github.event.inputs.slot_override }}" ]; then
+            echo "slot=${{ github.event.inputs.slot_override }}" >> $GITHUB_OUTPUT
+          else
+            HOUR=$(date -u +%H | sed 's/^0//')
+            case $HOUR in
+              6)  echo "slot=1" >> $GITHUB_OUTPUT ;;
+              9)  echo "slot=2" >> $GITHUB_OUTPUT ;;
+              12) echo "slot=3" >> $GITHUB_OUTPUT ;;
+              15) echo "slot=4" >> $GITHUB_OUTPUT ;;
+              18) echo "slot=5" >> $GITHUB_OUTPUT ;;
+              21) echo "slot=6" >> $GITHUB_OUTPUT ;;
+              *)  echo "slot=0" >> $GITHUB_OUTPUT ;;
+            esac
+          fi
+
+      - name: Scrape news sources
+        if: steps.slot.outputs.slot != '0'
+        run: |
+          python scripts/scrape_sources.py \
+            --slot ${{ steps.slot.outputs.slot }} \
+            --beat "$AGENT_BEAT" \
+            --output raw_sources.json
+
+      - name: Run agent — research, fact-check, write, submit
+        if: steps.slot.outputs.slot != '0'
+        run: |
+          python scripts/run_agent.py \
+            --slot ${{ steps.slot.outputs.slot }} \
+            --sources raw_sources.json \
+            --beat "$AGENT_BEAT" \
+            --primary-skill "$AGENT_PRIMARY_SKILL" \
+            --btc-address "$BTC_ADDRESS" \
+            --log news-log.md
+
+      - name: Commit updated log
+        if: steps.slot.outputs.slot != '0'
+        run: |
+          git config user.name "aibtc-news-agent"
+          git config user.email "agent@noreply"
+          git add news-log.md
+          git diff --cached --quiet || git commit -m "signal log: slot ${{ steps.slot.outputs.slot }} $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
