@@ -17,6 +17,7 @@ jobs:
     env:
       BTC_ADDRESS: ${{ secrets.BTC_ADDRESS }}
       WALLET_MNEMONIC: ${{ secrets.WALLET_MNEMONIC }}
+      WALLET_PASSWORD: ${{ secrets.WALLET_PASSWORD }}
 
     steps:
       - name: Set up Node.js
@@ -96,14 +97,26 @@ jobs:
                   await send('notifications/initialized', {});
                   console.log('[mcp] Initialized');
 
-                  // 2. Import wallet from mnemonic
+                  // 2. Import wallet from mnemonic, extract wallet ID
                   const imported = await send('tools/call', {
                     name: 'wallet_import',
                     arguments: { name: 'serene-spring', mnemonic: WALLET_MNEMONIC }
                   });
-                  console.log('[mcp] Wallet imported');
+                  const importText = imported?.content?.[0]?.text || '';
+                  const walletIdMatch = importText.match(/"id"\s*:\s*"([^"]+)"/);
+                  const walletId = walletIdMatch ? walletIdMatch[1] : null;
+                  console.log('[mcp] Wallet imported, id:', walletId || '(not found in: ' + importText.slice(0,100) + ')');
 
-                  // 3. Sign message
+                  // 3. Unlock the wallet
+                  if (walletId) {
+                    await send('tools/call', {
+                      name: 'wallet_unlock',
+                      arguments: { walletId, password: process.env.WALLET_PASSWORD || 'lesh1234' }
+                    });
+                    console.log('[mcp] Wallet unlocked');
+                  }
+
+                  // 4. Sign message
                   const signResult = await send('tools/call', {
                     name: 'btc_sign_message',
                     arguments: { message: msg }
