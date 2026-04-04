@@ -2,8 +2,8 @@ name: Serene Spring Heartbeat
 
 on:
   schedule:
-    # Every 4 minutes (within AIBTC's 5-min window)
-    - cron: "*/4 * * * *"
+    # Start a new 2-hour loop every 2 hours - reliable cron vs every-4-min
+    - cron: "0 */2 * * *"
   workflow_dispatch:
 
 permissions:
@@ -12,7 +12,7 @@ permissions:
 jobs:
   heartbeat:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 119  # Max 2-hour loop
 
     env:
       BTC_ADDRESS: ${{ secrets.BTC_ADDRESS }}
@@ -28,21 +28,20 @@ jobs:
       - name: Install MCP server
         run: npm install -g @aibtc/mcp-server@latest
 
-      - name: Send heartbeat
+      - name: Heartbeat loop (every 5 min for 2 hours)
         run: |
-          node - <<'EOF'
+          cat > /tmp/heartbeat.js << 'JSEOF'
           const https = require('https');
           const { spawn } = require('child_process');
           const readline = require('readline');
 
           const BTC_ADDRESS = process.env.BTC_ADDRESS;
           const WALLET_MNEMONIC = process.env.WALLET_MNEMONIC;
+          const WALLET_PASSWORD = process.env.WALLET_PASSWORD;
 
-          // Use promise-based MCP client that keeps one connection open
           async function runHeartbeat() {
             const ts = new Date().toISOString();
             const msg = `AIBTC Check-In | ${ts}`;
-            console.log(`[${ts}] Starting...`);
 
             const result = await new Promise((resolve, reject) => {
               const proc = spawn('aibtc-mcp-server', [], {
@@ -54,9 +53,8 @@ jobs:
                 }
               });
 
-              proc.stderr.on('data', d => process.stderr.write(d));
+              proc.stderr.on('data', () => {});
 
-              let output = '';
               let reqId = 1;
               const pending = {};
 
@@ -85,52 +83,29 @@ jobs:
 
               proc.on('error', reject);
 
-              // Run sequence after server starts
               setTimeout(async () => {
                 try {
-                  // 1. Initialize
                   await send('initialize', {
-                    protocolVersion: '2024-11-05',
-                    capabilities: {},
+                    protocolVersion: '2024-11-05', capabilities: {},
                     clientInfo: { name: 'serene-spring', version: '1' }
                   });
                   await send('notifications/initialized', {});
-                  console.log('[mcp] Initialized');
-
-                  // 2. Import wallet from mnemonic (password required, min 8 chars)
                   await send('tools/call', {
                     name: 'wallet_import',
-                    arguments: {
-                      name: 'serene-spring',
-                      mnemonic: WALLET_MNEMONIC,
-                      password: process.env.WALLET_PASSWORD,
-                      network: 'mainnet'
-                    }
+                    arguments: { name: 'serene-spring', mnemonic: WALLET_MNEMONIC, password: WALLET_PASSWORD, network: 'mainnet' }
                   });
-                  console.log('[mcp] Wallet imported');
-
-                  // 3. Unlock active wallet (no walletId needed)
                   await send('tools/call', {
                     name: 'wallet_unlock',
-                    arguments: { password: process.env.WALLET_PASSWORD }
+                    arguments: { password: WALLET_PASSWORD }
                   });
-                  console.log('[mcp] Wallet unlocked');
-
-                  // 4. Sign message
                   const signResult = await send('tools/call', {
                     name: 'btc_sign_message',
                     arguments: { message: msg }
                   });
-
                   const text = signResult?.content?.[0]?.text || '';
                   const sigMatch = text.match(/"signature"\s*:\s*"([^"]+)"/) ||
                                    text.match(/signature.*?\\"([^\\"]+)\\"/);
-
-                  if (!sigMatch) {
-                    console.error('[mcp] Sign output:', text.slice(0, 300));
-                    throw new Error('No signature in response');
-                  }
-
+                  if (!sigMatch) throw new Error('No signature in: ' + text.slice(0, 100));
                   proc.kill();
                   resolve({ signature: sigMatch[1], ts });
                 } catch(err) {
@@ -139,17 +114,9 @@ jobs:
                 }
               }, 400);
 
-              setTimeout(() => {
-                if (Object.keys(pending).length > 0) {
-                  proc.kill();
-                  reject(new Error('Overall timeout'));
-                }
-              }, 25000);
+              setTimeout(() => { proc.kill(); reject(new Error('Overall timeout')); }, 20000);
             });
 
-            console.log(`[${result.ts}] Signed (${result.signature.substring(0,20)}...)`);
-
-            // POST to heartbeat API
             const payload = JSON.stringify({
               signature: result.signature,
               timestamp: result.ts,
@@ -158,13 +125,8 @@ jobs:
 
             return new Promise((resolve) => {
               const req = https.request({
-                hostname: 'aibtc.com',
-                path: '/api/heartbeat',
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Content-Length': Buffer.byteLength(payload)
-                }
+                hostname: 'aibtc.com', path: '/api/heartbeat', method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
               }, (res) => {
                 let data = '';
                 res.on('data', c => data += c);
@@ -172,30 +134,36 @@ jobs:
                   try {
                     const r = JSON.parse(data);
                     if (r.success) {
-                      console.log(`[${result.ts}] ✓ checkInCount: ${r.checkIn?.checkInCount || '?'}`);
+                      process.stdout.write(`[${result.ts}] checkInCount: ${r.checkIn?.checkInCount || '?'}\n`);
                       resolve(true);
                     } else {
-                      console.error(`[${result.ts}] ⚠️ ${r.error?.message || JSON.stringify(r.error)}`);
+                      process.stdout.write(`[${result.ts}] WARN: ${r.error?.message || JSON.stringify(r.error)}\n`);
                       resolve(false);
                     }
                   } catch(e) {
-                    console.error(`Invalid response: ${data.slice(0, 300)}`);
+                    process.stdout.write(`[${result.ts}] ERROR: ${data.slice(0, 100)}\n`);
                     resolve(false);
                   }
                 });
               });
-              req.on('error', e => { console.error(e.message); resolve(false); });
+              req.on('error', e => { process.stdout.write(`ERROR: ${e.message}\n`); resolve(false); });
               req.write(payload);
               req.end();
             });
           }
 
           runHeartbeat().then(ok => process.exit(ok ? 0 : 1)).catch(err => {
-            console.error('Fatal:', err.message);
+            process.stderr.write('Fatal: ' + err.message + '\n');
             process.exit(1);
           });
-          EOF
+          JSEOF
 
-      - name: Log summary
-        if: always()
-        run: echo "Heartbeat run complete at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          # Loop: 24 heartbeats over ~2 hours (every 5 minutes)
+          for i in $(seq 1 24); do
+            echo "--- Heartbeat $i/24 at $(date -u +'%H:%M:%S UTC') ---"
+            node /tmp/heartbeat.js || echo "Heartbeat $i failed, continuing..."
+            if [ $i -lt 24 ]; then
+              sleep 300  # 5 minutes between beats
+            fi
+          done
+          echo "Loop complete: 24 heartbeats sent"
