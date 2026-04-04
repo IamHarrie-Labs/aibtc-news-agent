@@ -53,7 +53,7 @@ jobs:
           const BTC_ADDRESS = process.env.BTC_ADDRESS;
           const WALLET_PASSWORD = process.env.WALLET_PASSWORD;
           const WALLET_MNEMONIC = process.env.WALLET_MNEMONIC;
-          const WALLET_ID = 'e0704dea-0eca-4a02-a964-b7259606cbc1';
+          const WALLET_ID = '3171556e-bdd2-4e35-a1df-3f6f025ed9b7';
 
           async function mcpSingleCall(tool, args) {
             return new Promise((resolve) => {
@@ -98,7 +98,7 @@ jobs:
 
             // 1. Unlock wallet
             const unlockOut = await mcpSingleCall('wallet_unlock', { walletId: WALLET_ID, password: WALLET_PASSWORD });
-            if (!unlockOut.includes('Wallet unlocked successfully')) {
+            if (unlockOut.includes('"isError":true') || !unlockOut.includes('"result"')) {
               console.error(`[${ts}] ❌ Unlock failed`);
               console.error(`Unlock output: ${unlockOut.slice(0, 500)}`);
               process.exit(1);
@@ -107,17 +107,20 @@ jobs:
 
             // 2. Sign message
             const sigOut = await mcpSingleCall('btc_sign_message', { message: msg });
-            const sigMatch = sigOut.match(/signature.*?\\"([^\\"]+)\\"/);
+            // Try both JSON escape formats for signature
+            let sigMatch = sigOut.match(/signature.*?\\"([^\\"]+)\\"/) ||
+                           sigOut.match(/"signature"\s*:\s*"([^"]+)"/);
             if (!sigMatch) {
               console.error(`[${ts}] ❌ Sign failed`);
               console.error(`Sign output: ${sigOut.slice(0, 500)}`);
               process.exit(1);
             }
-            console.log(`[${ts}] ✓ Message signed`);
+            const signature = sigMatch[1];
+            console.log(`[${ts}] ✓ Message signed (${signature.substring(0,20)}...)`);
 
             // 3. Send heartbeat to API
             const payload = JSON.stringify({
-              signature: sigMatch[1],
+              signature: signature,
               timestamp: ts,
               btcAddress: BTC_ADDRESS
             });
