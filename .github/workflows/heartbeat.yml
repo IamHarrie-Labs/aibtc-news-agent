@@ -60,16 +60,18 @@ jobs:
           async function mcpSingleCall(tool, args) {
             return new Promise((resolve) => {
               const proc = spawn('npx', ['@aibtc/mcp-server@latest'], {
-                stdio: ['pipe', 'pipe', 'pipe'],
+                stdio: ['pipe', 'pipe', 'inherit'],
                 env: { ...process.env, NETWORK: 'mainnet' }
               });
 
               let output = '';
-              const rl = readline.createInterface({ input: proc.stdout });
-              rl.on('line', (l) => { output += l + '\n'; });
-              proc.stderr.on('data', () => {});
+              proc.stdout.on('data', (d) => {
+                output += d.toString();
+                console.log(`[mcp-${tool}] stdout:`, d.toString().slice(0, 150));
+              });
 
               setTimeout(() => {
+                console.log(`[mcp-${tool}] Sending init...`);
                 proc.stdin.write(JSON.stringify({
                   jsonrpc: '2.0',
                   id: 0,
@@ -83,6 +85,7 @@ jobs:
               }, 500);
 
               setTimeout(() => {
+                console.log(`[mcp-${tool}] Sending tool call...`);
                 proc.stdin.write(JSON.stringify({
                   jsonrpc: '2.0',
                   id: 1,
@@ -92,6 +95,7 @@ jobs:
               }, 1200);
 
               setTimeout(() => {
+                console.log(`[mcp-${tool}] Killing process, output length: ${output.length}`);
                 proc.kill();
                 resolve(output);
               }, 5000);
