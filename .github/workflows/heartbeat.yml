@@ -36,7 +36,6 @@ jobs:
       - name: Install dependencies
         run: |
           npm install -g @aibtc/mcp-server@latest
-          npm install
 
       - name: Create wallet file
         run: |
