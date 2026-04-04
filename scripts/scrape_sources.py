@@ -67,14 +67,20 @@ SOURCES = {
     ],
 }
 
-# Slot → which source buckets to pull from
+# Slot → which source buckets to pull from (12 slots, every 2 hours)
 SLOT_SOURCE_MAP = {
-    1: ["research"],                        # 06:00 UTC — arxiv + papers
-    2: ["web3_protocol", "ai_general"],     # 09:00 UTC — beat sweep
-    3: ["market_onchain"],                  # 12:00 UTC — on-chain data
-    4: ["web3_protocol", "research"],       # 15:00 UTC — second beat sweep
-    5: ["web3_protocol", "ai_general"],     # 18:00 UTC — scout / breaking
-    6: ["deals_ecosystem", "web3_protocol"],# 21:00 UTC — deal flow wrap
+    1:  ["research"],                        # 00:00 UTC — midnight sweep
+    2:  ["web3_protocol", "ai_general"],     # 02:00 UTC — early research
+    3:  ["market_onchain"],                  # 04:00 UTC — pre-market
+    4:  ["research"],                        # 06:00 UTC — arxiv + papers
+    5:  ["web3_protocol", "ai_general"],     # 08:00 UTC — beat sweep
+    6:  ["market_onchain"],                  # 10:00 UTC — on-chain data
+    7:  ["web3_protocol"],                   # 12:00 UTC — midday beat
+    8:  ["market_onchain", "research"],      # 14:00 UTC — market update
+    9:  ["web3_protocol", "ai_general"],     # 16:00 UTC — US session scout
+    10: ["web3_protocol"],                   # 18:00 UTC — beat sweep
+    11: ["deals_ecosystem", "web3_protocol"],# 20:00 UTC — deal flow
+    12: ["research", "ai_general"],          # 22:00 UTC — daily wrap
 }
 
 # Beat → keywords to filter articles for relevance
