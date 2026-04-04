@@ -53,7 +53,6 @@ jobs:
           const WALLET_ID = 'e0704dea-0eca-4a02-a964-b7259606cbc1';
           const TEST_MODE = process.env.TEST_MODE === 'true';
 
-          // Message to sign
           const now = new Date().toISOString();
           const message = `AIBTC Check-In | ${now}`;
 
@@ -65,74 +64,31 @@ jobs:
             process.exit(0);
           }
 
-          // Spawn MCP server
           const proc = spawn('npx', ['@aibtc/mcp-server@latest'], {
             env: { ...process.env, NETWORK: 'mainnet' },
             stdio: ['pipe', 'pipe', 'pipe']
           });
 
-          let buffer = '';
-          let requestId = 0;
-          let signatureCaptured = false;
+          let out = '';
+          let unlocked = false;
 
           proc.stdout.on('data', (data) => {
-            buffer += data.toString();
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
+            out += data.toString();
 
-            for (const line of lines) {
-              if (!line.trim()) continue;
-
-              try {
-                const parsed = JSON.parse(line);
-
-                // Handle initialize response
-                if (parsed.id === 0) {
-                  console.log('[mcp] Initialized');
-                  // Send unlock
-                  proc.stdin.write(JSON.stringify({
-                    jsonrpc: '2.0',
-                    id: 1,
-                    method: 'tools/call',
-                    params: {
-                      name: 'wallet_unlock',
-                      arguments: { walletId: WALLET_ID, password: WALLET_PASSWORD }
-                    }
-                  }) + '\n');
+            // Check for unlock success text
+            if (!unlocked && out.includes('unlocked successfully')) {
+              unlocked = true;
+              console.log('[mcp] Wallet unlocked');
+              // Send sign request
+              proc.stdin.write(JSON.stringify({
+                jsonrpc: '2.0',
+                id: 2,
+                method: 'tools/call',
+                params: {
+                  name: 'btc_sign_message',
+                  arguments: { message: message }
                 }
-
-                // Handle unlock response
-                else if (parsed.id === 1) {
-                  console.log('[mcp] Wallet unlocked');
-                  // Send sign request
-                  proc.stdin.write(JSON.stringify({
-                    jsonrpc: '2.0',
-                    id: 2,
-                    method: 'tools/call',
-                    params: {
-                      name: 'btc_sign_message',
-                      arguments: { message: message }
-                    }
-                  }) + '\n');
-                }
-
-                // Handle sign response
-                else if (parsed.id === 2 && parsed.result) {
-                  const text = parsed.result?.content?.[0]?.text;
-                  if (text) {
-                    const signResult = JSON.parse(text);
-                    const signature = signResult.signature;
-                    console.log(`[mcp] Signature captured (${signature.substring(0, 20)}...)`);
-                    signatureCaptured = true;
-                    proc.kill();
-
-                    // Send heartbeat API call
-                    sendHeartbeat(signature, now);
-                  }
-                }
-              } catch (e) {
-                // Not JSON, skip
-              }
+              }) + '\n');
             }
           });
 
@@ -140,22 +96,56 @@ jobs:
             console.error('[mcp-stderr]', data.toString().slice(0, 200));
           });
 
-          proc.on('error', (err) => {
-            console.error('[mcp-error]', err.message);
+          proc.on('close', () => {
+            // Parse all output lines to find signature
+            const lines = out.split('\n');
+            for (const line of lines) {
+              try {
+                const j = JSON.parse(line);
+                if (j.id === 2 && j.result) {
+                  const text = j.result?.content?.[0]?.text;
+                  if (text) {
+                    const inner = JSON.parse(text);
+                    if (inner.signature) {
+                      const sig = inner.signature;
+                      console.log(`[mcp] Signature captured (${sig.substring(0, 20)}...)`);
+                      sendHeartbeat(sig, now);
+                      return;
+                    }
+                  }
+                }
+              } catch (e) {}
+            }
+            console.error('[heartbeat] Failed to get signature');
             process.exit(1);
           });
 
-          // Send initialize
-          proc.stdin.write(JSON.stringify({
-            jsonrpc: '2.0',
-            id: 0,
-            method: 'initialize',
-            params: {
-              protocolVersion: '2024-11-05',
-              capabilities: {},
-              clientInfo: { name: 'serene-spring-heartbeat', version: '1.0' }
-            }
-          }) + '\n');
+          // Send initialize after short delay
+          setTimeout(() => {
+            proc.stdin.write(JSON.stringify({
+              jsonrpc: '2.0',
+              id: 0,
+              method: 'initialize',
+              params: {
+                protocolVersion: '2024-11-05',
+                capabilities: {},
+                clientInfo: { name: 'serene-spring-heartbeat', version: '1.0' }
+              }
+            }) + '\n');
+          }, 300);
+
+          // Send unlock after longer delay
+          setTimeout(() => {
+            proc.stdin.write(JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'tools/call',
+              params: {
+                name: 'wallet_unlock',
+                arguments: { walletId: WALLET_ID, password: WALLET_PASSWORD }
+              }
+            }) + '\n');
+          }, 1200);
 
           // Timeout protection
           setTimeout(() => {
