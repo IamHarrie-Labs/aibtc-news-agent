@@ -59,7 +59,8 @@ jobs:
 
           async function mcpSingleCall(tool, args) {
             return new Promise((resolve) => {
-              const proc = spawn('npx', ['@aibtc/mcp-server@latest'], {
+              // Try to use the globally installed MCP server
+              const proc = spawn('bash', ['-c', '@aibtc/mcp-server'], {
                 stdio: ['pipe', 'pipe', 'inherit'],
                 env: { ...process.env, NETWORK: 'mainnet' }
               });
