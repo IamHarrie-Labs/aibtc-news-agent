@@ -72,26 +72,52 @@ jobs:
 
           let out = '';
           let unlocked = false;
+          let initSent = false;
+          let unlockSent = false;
 
           proc.stdout.on('data', (data) => {
             const chunk = data.toString();
             out += chunk;
-            console.log('[mcp-stdout]', chunk.slice(0, 100));
 
-            // Check for unlock success text
-            if (!unlocked && out.includes('unlocked successfully')) {
-              unlocked = true;
-              console.log('[mcp] Wallet unlocked');
-              // Send sign request
-              proc.stdin.write(JSON.stringify({
-                jsonrpc: '2.0',
-                id: 2,
-                method: 'tools/call',
-                params: {
-                  name: 'btc_sign_message',
-                  arguments: { message: message }
+            // Parse each complete JSON line
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+              if (line.trim()) {
+                console.log('[mcp-line]', line.slice(0, 150));
+                try {
+                  const parsed = JSON.parse(line);
+                  // Check for any response with id 1 (unlock)
+                  if (!unlocked && parsed.id === 1) {
+                    unlocked = true;
+                    console.log('[mcp] Got response to unlock request');
+                    // Send sign request
+                    proc.stdin.write(JSON.stringify({
+                      jsonrpc: '2.0',
+                      id: 2,
+                      method: 'tools/call',
+                      params: {
+                        name: 'btc_sign_message',
+                        arguments: { message: message }
+                      }
+                    }) + '\n');
+                  }
+                } catch (e) {
+                  // Not JSON, might be log output
+                  if (!unlocked && line.includes('unlocked successfully')) {
+                    unlocked = true;
+                    console.log('[mcp] Wallet unlocked (text match)');
+                    proc.stdin.write(JSON.stringify({
+                      jsonrpc: '2.0',
+                      id: 2,
+                      method: 'tools/call',
+                      params: {
+                        name: 'btc_sign_message',
+                        arguments: { message: message }
+                      }
+                    }) + '\n');
+                  }
                 }
-              }) + '\n');
+              }
             }
           });
 
@@ -127,6 +153,7 @@ jobs:
           // Send initialize after waiting for server startup
           setTimeout(() => {
             console.log('[mcp] Sending initialize...');
+            initSent = true;
             proc.stdin.write(JSON.stringify({
               jsonrpc: '2.0',
               id: 0,
@@ -137,11 +164,12 @@ jobs:
                 clientInfo: { name: 'serene-spring-heartbeat', version: '1.0' }
               }
             }) + '\n');
-          }, 2000);
+          }, 1000);
 
           // Send unlock after server processes initialize
           setTimeout(() => {
             console.log('[mcp] Sending unlock...');
+            unlockSent = true;
             proc.stdin.write(JSON.stringify({
               jsonrpc: '2.0',
               id: 1,
@@ -151,7 +179,7 @@ jobs:
                 arguments: { walletId: WALLET_ID, password: WALLET_PASSWORD }
               }
             }) + '\n');
-          }, 3500);
+          }, 2000);
 
           // Timeout protection
           setTimeout(() => {
