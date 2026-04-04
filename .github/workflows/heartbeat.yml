@@ -43,6 +43,7 @@ jobs:
           echo "${{ secrets.WALLET_ENCRYPTED }}" | base64 -d > ~/.aibtc/wallets/e0704dea-0eca-4a02-a964-b7259606cbc1/keystore.json
 
       - name: Send heartbeat
+        timeout-minutes: 1
         run: |
           node - <<'EOF'
           const https = require('https');
@@ -123,8 +124,9 @@ jobs:
             process.exit(1);
           });
 
-          // Send initialize after short delay
+          // Send initialize after waiting for server startup
           setTimeout(() => {
+            console.log('[mcp] Sending initialize...');
             proc.stdin.write(JSON.stringify({
               jsonrpc: '2.0',
               id: 0,
@@ -135,10 +137,11 @@ jobs:
                 clientInfo: { name: 'serene-spring-heartbeat', version: '1.0' }
               }
             }) + '\n');
-          }, 300);
+          }, 2000);
 
-          // Send unlock after longer delay
+          // Send unlock after server processes initialize
           setTimeout(() => {
+            console.log('[mcp] Sending unlock...');
             proc.stdin.write(JSON.stringify({
               jsonrpc: '2.0',
               id: 1,
@@ -148,7 +151,7 @@ jobs:
                 arguments: { walletId: WALLET_ID, password: WALLET_PASSWORD }
               }
             }) + '\n');
-          }, 1200);
+          }, 3500);
 
           // Timeout protection
           setTimeout(() => {
