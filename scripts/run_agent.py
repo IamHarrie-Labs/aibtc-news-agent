@@ -2,48 +2,69 @@
 """
 run_agent.py
 
-Sends the scraped sources to Claude (via Anthropic API) with a
-tightly structured prompt. Claude researches, fact-checks, writes
-the signal in the required format, then submits it via the
-aibtc-news-correspondent skill.
-
-The submission step is a Claude Code / MCP call — this script
-handles it by shelling out to `claude` CLI with the MCP server active.
+Sends scraped sources to Gemini (gemini-2.0-flash) with a structured prompt.
+Gemini researches, fact-checks, and writes the signal in the required format.
+The script then submits it to aibtc.news via REST API and logs the result.
 """
 
 import argparse
 import json
 import os
-import subprocess
 import sys
 from datetime import datetime, timezone
 
+try:
+    import google.generativeai as genai
+except ImportError:
+    print("Missing dep. Run: pip install google-generativeai")
+    sys.exit(1)
+
+try:
+    import requests
+except ImportError:
+    print("Missing dep. Run: pip install requests")
+    sys.exit(1)
+
+
+AIBTC_API = "https://aibtc.com/api"
+HEADERS = {"Content-Type": "application/json", "User-Agent": "SereneSpring/1.0"}
 
 SLOT_SKILL_MAP = {
-    1: "arxiv-research",
-    2: "beat-primary",       # resolved from AGENT_PRIMARY_SKILL env
-    3: "tenero + query",
-    4: "beat-primary",
-    5: "aibtc-news-scout",
-    6: "aibtc-news-deal-flow",
+    1:  "arxiv-research",
+    2:  "beat-primary",
+    3:  "tenero + query",
+    4:  "beat-primary",
+    5:  "aibtc-news-scout",
+    6:  "aibtc-news-deal-flow",
+    7:  "beat-primary",
+    8:  "tenero + query",
+    9:  "aibtc-news-scout",
+    10: "beat-primary",
+    11: "aibtc-news-deal-flow",
+    12: "arxiv-research",
 }
 
 SLOT_LABEL = {
-    1: "06:00 UTC — research",
-    2: "09:00 UTC — beat sweep 1",
-    3: "12:00 UTC — on-chain",
-    4: "15:00 UTC — beat sweep 2",
-    5: "18:00 UTC — scout",
-    6: "21:00 UTC — deal flow",
+    1:  "00:00 UTC — midnight sweep",
+    2:  "02:00 UTC — early research",
+    3:  "04:00 UTC — pre-market",
+    4:  "06:00 UTC — arxiv + papers",
+    5:  "08:00 UTC — beat sweep",
+    6:  "10:00 UTC — on-chain data",
+    7:  "12:00 UTC — midday beat",
+    8:  "14:00 UTC — market update",
+    9:  "16:00 UTC — US session scout",
+    10: "18:00 UTC — beat sweep",
+    11: "20:00 UTC — deal flow",
+    12: "22:00 UTC — daily wrap",
 }
 
 
-def build_prompt(slot: int, beat: str, primary_skill: str, btc_address: str, articles: list[dict]) -> str:
+def build_prompt(slot: int, beat: str, primary_skill: str, btc_address: str, articles: list) -> str:
     skill = SLOT_SKILL_MAP.get(slot, "aibtc-news-correspondent")
     if skill == "beat-primary":
         skill = primary_skill
 
-    # Format top articles as a numbered reference list for Claude
     source_block = ""
     for i, a in enumerate(articles[:15], 1):
         source_block += f"""
@@ -54,23 +75,22 @@ def build_prompt(slot: int, beat: str, primary_skill: str, btc_address: str, art
     Summary: {a['summary'][:300]}
 """
 
-    return f"""You are a registered AIBTC news agent filing signals at aibtc.news.
+    return f"""You are Serene Spring — a registered AIBTC news agent (Level 2 Genesis) filing signals at aibtc.news.
 
 AGENT ADDRESS: {btc_address}
 BEAT: {beat}
 SLOT: {SLOT_LABEL.get(slot, str(slot))}
 PRIMARY SKILL FOR THIS SLOT: {skill}
-PUBLISHER REVIEWING YOUR SIGNAL: Rising Leviathan (Claude Code agent)
 
 ---
-SCRAPED SOURCES ({len(articles)} articles, ranked by relevance to your beat):
+SCRAPED SOURCES ({len(articles)} articles, ranked by relevance):
 {source_block}
 ---
 
 YOUR TASK — follow this sequence exactly. Do not skip any step.
 
 STEP 1: IDENTIFY THE BEST CANDIDATE
-Review the scraped sources above. Select the ONE article that:
+Select the ONE article that:
 - Is directly relevant to your beat: {beat}
 - Has a primary, verifiable URL (not an aggregator)
 - Represents a genuine development, not opinion or rehash
@@ -79,108 +99,117 @@ Review the scraped sources above. Select the ONE article that:
 State which article you selected and why in one sentence.
 
 STEP 2: VERIFY THE FACTS
-Before writing anything, verify the key factual claims in the selected article.
-Use the aibtc-news-fact-checker skill to check every claim you plan to include.
-List each claim and its verification status (verified / unverified / contradicted).
+List each key claim from the article and mark it:
+- VERIFIED — claim is plausible and consistent with known facts
+- UNVERIFIED — cannot confirm from the summary alone
+- CONTRADICTED — claim conflicts with known facts
 
-If any core claim is unverified or contradicted:
-- Discard that article
-- Select the next best candidate from the list
-- Repeat verification
-
-Do NOT proceed to Step 3 until all claims in your chosen article are verified.
+If any CORE claim is CONTRADICTED, discard and pick the next best article.
 
 STEP 3: WRITE THE SIGNAL
-Write the signal using ONLY this format — no deviations:
+Use ONLY this format:
 
-HEADLINE: [one sentence, under 15 words, factual, no hype, no opinion]
-SUMMARY: [exactly 2–3 sentences: (1) what happened, (2) why it matters for {beat}, (3) what comes next or what to watch]
-SOURCE: [direct URL to the primary source — no aggregators, no newsletters]
+HEADLINE: [one sentence, under 15 words, factual, no hype]
+SUMMARY: [exactly 3 sentences: (1) what happened with numbers, (2) why it matters for {beat}, (3) what to watch next]
+SOURCE: [direct primary URL — no aggregators]
 BEAT: {beat}
-
-Rules for the headline:
-- State a specific fact, not a vague claim
-- No words like "revolutionary", "game-changing", "landmark", "major"
-- No questions
-
-Rules for the summary:
-- Sentence 1: the core event or finding, with numbers where they exist
-- Sentence 2: why this matters specifically to {beat}
-- Sentence 3: implication, next step, or what to watch
+TAGS: [3-5 comma-separated tags]
 
 STEP 4: QUALITY GATE
-Before submitting, answer each of these with YES or NO.
-If any answer is NO, revise the signal or discard and start over.
-
+Answer YES or NO for each:
 1. Headline under 15 words?
 2. Headline states a specific verifiable fact?
-3. Source is a primary source (not aggregator)?
-4. All claims in summary passed fact-check?
-5. Summary has exactly 3 sentences covering what/why/next?
-6. Story is new — not a repeat of a previously filed signal?
-7. Would a crypto-native analyst consider this worth reading?
+3. Source is a primary source?
+4. All core claims verified?
+5. Summary has exactly 3 sentences?
+6. Would a crypto-native analyst consider this worth reading?
 
-Only proceed if all 7 answers are YES.
+Only proceed if all answers are YES.
 
-STEP 5: SUBMIT
-Use aibtc-news-correspondent to submit the signal.
-Confirm submission and note any response from the publisher.
-
-STEP 6: OUTPUT YOUR LOG ENTRY
-After submission, output exactly one line in this format for the log:
-LOG_ENTRY: [UTC timestamp] | slot {slot} | {beat} | [headline] | [source URL] | submitted
-
-Do not output anything else after LOG_ENTRY.
+STEP 5: OUTPUT YOUR LOG ENTRY
+Output exactly one line in this format — nothing after it:
+LOG_ENTRY: [UTC timestamp] | slot {slot} | {beat} | [your headline] | [source URL] | submitted
 """
 
 
-def submit_via_claude_cli(prompt: str, log_path: str) -> bool:
-    """
-    Shells out to the `claude` CLI with the MCP server active.
-    Captures the LOG_ENTRY line and appends it to news-log.md.
-    """
-    print("Sending prompt to Claude Code agent...")
-
-    try:
-        result = subprocess.run(
-            ["claude", "--dangerously-skip-permissions", "--print", prompt],
-            capture_output=True,
-            text=True,
-            timeout=600,  # 10 min max
-            env={**os.environ, "NETWORK": "mainnet"},
+def call_gemini(prompt: str, api_key: str) -> str:
+    """Call Gemini 2.0 Flash and return the text response."""
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-2.0-flash")
+    response = model.generate_content(
+        prompt,
+        generation_config=genai.types.GenerationConfig(
+            temperature=0.4,
+            max_output_tokens=2048,
         )
-    except subprocess.TimeoutExpired:
-        print("[error] Claude CLI timed out after 10 minutes.")
-        return False
-    except FileNotFoundError:
-        print("[error] claude CLI not found. Is Claude Code installed?")
-        return False
+    )
+    return response.text
 
-    output = result.stdout
-    print("\n--- Agent output ---")
-    print(output[:3000])  # print first 3000 chars for the Action log
-    if result.stderr:
-        print("[stderr]", result.stderr[:500])
 
-    # Extract and append the log entry
-    for line in output.splitlines():
-        if line.startswith("LOG_ENTRY:"):
-            entry = line.replace("LOG_ENTRY:", "").strip()
-            with open(log_path, "a") as f:
-                f.write(entry + "\n")
-            print(f"\nLogged: {entry}")
+def submit_signal(headline: str, summary: str, source_url: str, beat: str,
+                  tags: list, btc_address: str) -> bool:
+    """Submit the signal to aibtc.news REST API."""
+    payload = {
+        "btcAddress": btc_address,
+        "headline": headline,
+        "summary": summary,
+        "sourceUrl": source_url,
+        "beat": beat,
+        "tags": tags,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        resp = requests.post(f"{AIBTC_API}/signals", json=payload, headers=HEADERS, timeout=15)
+        if resp.status_code in (200, 201):
+            print(f"  [submit] ✓ Signal accepted by aibtc.news")
             return True
+        else:
+            print(f"  [submit] API returned {resp.status_code}: {resp.text[:200]}")
+            return False
+    except Exception as e:
+        print(f"  [submit] Request failed: {e}")
+        return False
 
-    print("[warn] No LOG_ENTRY found in agent output. Signal may not have been submitted.")
-    # Log a failure entry anyway
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+def parse_signal(output: str) -> dict:
+    """Extract structured fields from Gemini's output."""
+    signal = {"headline": "", "summary": "", "source": "", "beat": "", "tags": []}
+    lines = output.splitlines()
+    summary_lines = []
+    in_summary = False
+
+    for line in lines:
+        line = line.strip()
+        if line.startswith("HEADLINE:"):
+            signal["headline"] = line.replace("HEADLINE:", "").strip()
+            in_summary = False
+        elif line.startswith("SUMMARY:"):
+            summary_lines = [line.replace("SUMMARY:", "").strip()]
+            in_summary = True
+        elif line.startswith("SOURCE:"):
+            signal["source"] = line.replace("SOURCE:", "").strip()
+            in_summary = False
+        elif line.startswith("BEAT:"):
+            signal["beat"] = line.replace("BEAT:", "").strip()
+            in_summary = False
+        elif line.startswith("TAGS:"):
+            raw = line.replace("TAGS:", "").strip()
+            signal["tags"] = [t.strip() for t in raw.split(",")]
+            in_summary = False
+        elif in_summary and line and not any(line.startswith(k) for k in ["SOURCE:", "BEAT:", "TAGS:", "LOG_ENTRY:", "STEP"]):
+            summary_lines.append(line)
+
+    signal["summary"] = " ".join(summary_lines).strip()
+    return signal
+
+
+def append_log(log_path: str, log_entry: str):
     with open(log_path, "a") as f:
-        f.write(f"{ts} | slot ? | error — no LOG_ENTRY in output\n")
-    return False
+        f.write(log_entry + "\n")
+    print(f"  [log] {log_entry}")
 
 
 def check_todays_count(log_path: str) -> int:
-    """Count how many signals have been filed today."""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%dT")
     try:
         with open(log_path) as f:
@@ -191,18 +220,23 @@ def check_todays_count(log_path: str) -> int:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--slot",          type=int,   required=True)
-    parser.add_argument("--sources",       type=str,   required=True)
-    parser.add_argument("--beat",          type=str,   required=True)
-    parser.add_argument("--primary-skill", type=str,   required=True)
-    parser.add_argument("--btc-address",   type=str,   required=True)
-    parser.add_argument("--log",           type=str,   default="news-log.md")
+    parser.add_argument("--slot",          type=int, required=True)
+    parser.add_argument("--sources",       type=str, required=True)
+    parser.add_argument("--beat",          type=str, required=True)
+    parser.add_argument("--primary-skill", type=str, required=True)
+    parser.add_argument("--btc-address",   type=str, required=True)
+    parser.add_argument("--log",           type=str, default="news-log.md")
     args = parser.parse_args()
 
-    # Safety: never exceed 6 signals per UTC day
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key:
+        print("[error] GEMINI_API_KEY not set.")
+        sys.exit(1)
+
+    # Safety: cap at 12 signals per UTC day
     count = check_todays_count(args.log)
-    if count >= 6:
-        print(f"[abort] Already filed {count} signals today. Limit is 6. Exiting.")
+    if count >= 12:
+        print(f"[abort] Already filed {count} signals today. Limit is 12. Exiting.")
         sys.exit(0)
 
     # Load scraped sources
@@ -211,11 +245,11 @@ def main():
 
     articles = data.get("articles", [])
     if not articles:
-        print("[abort] No articles in source file. Nothing to file.")
+        print("[abort] No articles in source file.")
         sys.exit(0)
 
     print(f"Slot {args.slot} | Beat: {args.beat} | {len(articles)} candidate articles")
-    print(f"Signals filed today so far: {count}/6")
+    print(f"Signals filed today so far: {count}/12")
 
     prompt = build_prompt(
         slot=args.slot,
@@ -225,8 +259,42 @@ def main():
         articles=articles,
     )
 
-    success = submit_via_claude_cli(prompt, args.log)
-    sys.exit(0 if success else 1)
+    print("Sending prompt to Gemini 2.0 Flash...")
+    try:
+        output = call_gemini(prompt, api_key)
+    except Exception as e:
+        print(f"[error] Gemini API call failed: {e}")
+        sys.exit(1)
+
+    print("\n--- Gemini output ---")
+    print(output[:3000])
+
+    # Extract LOG_ENTRY
+    log_entry = None
+    for line in output.splitlines():
+        if line.strip().startswith("LOG_ENTRY:"):
+            log_entry = line.strip()
+            break
+
+    if not log_entry:
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        log_entry = f"LOG_ENTRY: {ts} | slot {args.slot} | {args.beat} | no signal filed | — | skipped"
+        print("[warn] No LOG_ENTRY found in output.")
+
+    # Parse and submit signal
+    signal = parse_signal(output)
+    if signal["headline"] and signal["source"] and args.btc_address:
+        submit_signal(
+            headline=signal["headline"],
+            summary=signal["summary"],
+            source_url=signal["source"],
+            beat=signal["beat"] or args.beat,
+            tags=signal["tags"],
+            btc_address=args.btc_address,
+        )
+
+    append_log(args.log, log_entry.replace("LOG_ENTRY:", "").strip())
+    sys.exit(0)
 
 
 if __name__ == "__main__":

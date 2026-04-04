@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 20
 
     env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       BTC_ADDRESS: ${{ secrets.BTC_ADDRESS }}
       STX_ADDRESS: ${{ secrets.STX_ADDRESS }}
       WALLET_PASSWORD: ${{ secrets.WALLET_PASSWORD }}
@@ -51,16 +51,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install -g @anthropic-ai/claude-code @aibtc/mcp-server@latest
-          npx @aibtc/mcp-server@latest --install
-          pip install anthropic requests feedparser --quiet
-
-      - name: Restore wallet
-        run: |
-          mkdir -p ~/.aibtc/wallets/e0704dea-0eca-4a02-a964-b7259606cbc1
-          echo '${{ secrets.WALLET_CONFIG_JSON }}' > ~/.aibtc/config.json
-          echo '${{ secrets.WALLET_INDEX_JSON }}' > ~/.aibtc/wallets.json
-          echo '${{ secrets.WALLET_KEYSTORE_JSON }}' > ~/.aibtc/wallets/e0704dea-0eca-4a02-a964-b7259606cbc1/keystore.json
+          pip install google-generativeai requests feedparser --quiet
 
       - name: Detect slot from UTC hour
         id: slot
