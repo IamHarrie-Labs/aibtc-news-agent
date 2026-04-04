@@ -1,326 +1,232 @@
 #!/usr/bin/env python3
 """
-run_agent.py — Serene Spring signal agent.
+run_agent.py
 
-Runs Claude with the appropriate skill prompt for the given slot,
-processes scraped sources, generates a signal, submits a heartbeat,
-and appends to the news log.
+Sends the scraped sources to Claude (via Anthropic API) with a
+tightly structured prompt. Claude researches, fact-checks, writes
+the signal in the required format, then submits it via the
+aibtc-news-correspondent skill.
+
+The submission step is a Claude Code / MCP call — this script
+handles it by shelling out to `claude` CLI with the MCP server active.
 """
 
 import argparse
 import json
 import os
-import sys
 import subprocess
-import hashlib
-import hmac
+import sys
 from datetime import datetime, timezone
-from pathlib import Path
 
-try:
-    import anthropic
-    import requests
-except ImportError:
-    print("Missing deps. Run: pip install anthropic requests", file=sys.stderr)
-    sys.exit(1)
 
-AIBTC_API = "https://aibtc.com/api"
-HEADERS = {"Content-Type": "application/json", "User-Agent": "SereneSpring/1.0"}
+SLOT_SKILL_MAP = {
+    1: "arxiv-research",
+    2: "beat-primary",       # resolved from AGENT_PRIMARY_SKILL env
+    3: "tenero + query",
+    4: "beat-primary",
+    5: "aibtc-news-scout",
+    6: "aibtc-news-deal-flow",
+}
 
-# ── Skill prompts by slot ────────────────────────────────────────────────────
-
-SLOT_PROMPTS = {
-    1: """You are Serene Spring, a Genesis-level AIBTC correspondent. Your beat covers
-Bitcoin DeFi, Stacks ecosystem, Ordinals/Runes, and the AI agent economy.
-
-You have just received a batch of arXiv research papers. Your job:
-1. SCAN each paper for signals relevant to your beat (Bitcoin, Stacks, autonomous agents, DeFi)
-2. SCORE each paper 1-10 for beat relevance and novelty
-3. SELECT the top 2-3 papers
-4. WRITE a short research digest (200-300 words) in aibtc.news correspondent voice:
-   - Lead with the most actionable insight
-   - Include paper titles, authors, and arXiv links
-   - Note implications for the Bitcoin/Stacks/agent ecosystem
-   - Keep it signal-dense, no fluff
-5. OUTPUT valid JSON only:
-{
-  "slot": 1,
-  "type": "arxiv_digest",
-  "headline": "...",
-  "body": "...",
-  "sources": [{"title": "...", "link": "...", "score": 0}],
-  "tags": ["research", "arxiv", ...]
-}""",
-
-    2: """You are Serene Spring, a Genesis-level AIBTC correspondent covering
-Bitcoin DeFi, Stacks, Ordinals/Runes, and the AI agent economy.
-
-You have received RSS feed items from your beat sources. Your job:
-1. IDENTIFY the top signal from today's feeds — one clear, verifiable event
-2. FACT-CHECK: cross-reference claims across multiple sources in the feed
-3. WRITE a signal post (150-250 words) in aibtc.news style:
-   - Hard news lede: what happened, who, when, what it means
-   - Include on-chain context where possible
-   - Cite your sources
-4. OUTPUT valid JSON only:
-{
-  "slot": 2,
-  "type": "beat_signal",
-  "headline": "...",
-  "body": "...",
-  "sources": [{"title": "...", "link": "..."}],
-  "tags": [...]
-}""",
-
-    3: """You are Serene Spring, a Genesis-level AIBTC correspondent.
-
-You have current Stacks network data + RSS feeds. Your job:
-1. ANALYZE the market data: STX supply, block activity, mempool, recent transactions
-2. IDENTIFY any notable on-chain trends or anomalies
-3. CROSS-REFERENCE with RSS news items for context
-4. WRITE a market brief (150-200 words):
-   - Lead with the most notable on-chain fact
-   - Include specific numbers (block height, tx count, fees, supply)
-   - Connect to broader narrative if RSS items support it
-5. OUTPUT valid JSON only:
-{
-  "slot": 3,
-  "type": "market_brief",
-  "headline": "...",
-  "body": "...",
-  "data_points": {"stx_price": null, "block_height": null, "mempool_size": null},
-  "tags": ["market", "stacks", ...]
-}""",
-
-    4: """You are Serene Spring, a Genesis-level AIBTC correspondent.
-
-Second beat pass of the day — RSS feeds from your primary beat.
-Your job:
-1. LOOK for developments since the morning pass (new announcements, responses, updates)
-2. WRITE a follow-up signal or new story if warranted (100-200 words)
-3. If nothing new is significant, write a SHORT note explaining why (50 words max)
-4. OUTPUT valid JSON only:
-{
-  "slot": 4,
-  "type": "beat_followup",
-  "headline": "...",
-  "body": "...",
-  "sources": [{"title": "...", "link": "..."}],
-  "tags": [...],
-  "has_signal": true
-}""",
-
-    5: """You are Serene Spring, a Genesis-level AIBTC correspondent.
-Your special role in slot 5 is scout — find new agents, new signals, emerging patterns.
-
-You have AIBTC network activity data + RSS from the agent economy. Your job:
-1. IDENTIFY newly registered agents, unusual activity, or emerging collaborations
-2. SPOT any agents approaching level-up thresholds or completing bounties
-3. WRITE a scout report (150-200 words):
-   - Lead with the most interesting new agent or activity
-   - Note agent names, levels, beats, owner handles
-   - Flag any unusual x402 payment flows or inbox spikes
-4. OUTPUT valid JSON only:
-{
-  "slot": 5,
-  "type": "scout_report",
-  "headline": "...",
-  "body": "...",
-  "agents_spotted": [{"name": "...", "level": null, "beat": "..."}],
-  "tags": ["scout", "agents", ...]
-}""",
-
-    6: """You are Serene Spring, a Genesis-level AIBTC correspondent.
-Slot 6 is deal flow — the final signal of the day.
-
-You have deal flow data: ordinals trades, x402 payments, completed bounties, contract deployments.
-Your job:
-1. FIND the day's most significant deal, trade, or on-chain event
-2. VERIFY: check amounts, addresses, and timestamps for plausibility
-3. WRITE a deal flow signal (150-200 words):
-   - Lead with the deal (what moved, how much, between whom)
-   - Include tx/inscription IDs where available
-   - Note implications: is this a trend? A one-off? A signal of demand?
-4. OUTPUT valid JSON only:
-{
-  "slot": 6,
-  "type": "deal_flow",
-  "headline": "...",
-  "body": "...",
-  "deal": {"type": "...", "amount": null, "asset": "...", "tx_id": "..."},
-  "tags": ["deals", "ordinals", ...]
-}""",
+SLOT_LABEL = {
+    1: "06:00 UTC — research",
+    2: "09:00 UTC — beat sweep 1",
+    3: "12:00 UTC — on-chain",
+    4: "15:00 UTC — beat sweep 2",
+    5: "18:00 UTC — scout",
+    6: "21:00 UTC — deal flow",
 }
 
 
-# ── Heartbeat ────────────────────────────────────────────────────────────────
+def build_prompt(slot: int, beat: str, primary_skill: str, btc_address: str, articles: list[dict]) -> str:
+    skill = SLOT_SKILL_MAP.get(slot, "aibtc-news-correspondent")
+    if skill == "beat-primary":
+        skill = primary_skill
 
-def send_heartbeat(btc_address: str) -> bool:
-    """Submit a heartbeat to the AIBTC network."""
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    message = f"AIBTC Check-In | {ts}"
+    # Format top articles as a numbered reference list for Claude
+    source_block = ""
+    for i, a in enumerate(articles[:15], 1):
+        source_block += f"""
+[{i}] {a['title']}
+    Source: {a['source']} | Type: {a['type']}
+    Published: {a.get('published', 'unknown')}
+    URL: {a['url']}
+    Summary: {a['summary'][:300]}
+"""
 
-    try:
-        # Use @aibtc/mcp-server CLI to sign the message
-        result = subprocess.run(
-            ["npx", "--yes", "@aibtc/mcp-server", "sign", message],
-            capture_output=True, text=True, timeout=30,
-            env={**os.environ, "WALLET_PASSWORD": os.environ.get("WALLET_PASSWORD", "")}
-        )
-        signature = result.stdout.strip()
-        if not signature:
-            print(f"  [heartbeat] Sign failed: {result.stderr}", file=sys.stderr)
-            return False
+    return f"""You are a registered AIBTC news agent filing signals at aibtc.news.
 
-        payload = {
-            "btcAddress": btc_address,
-            "message": message,
-            "signature": signature,
-        }
-        resp = requests.post(f"{AIBTC_API}/heartbeat", json=payload, headers=HEADERS, timeout=10)
-        if resp.status_code in (200, 201):
-            print(f"  [heartbeat] ✓ Submitted at {ts}")
-            return True
-        else:
-            print(f"  [heartbeat] Failed {resp.status_code}: {resp.text[:200]}", file=sys.stderr)
-            return False
-    except Exception as e:
-        print(f"  [heartbeat] Error: {e}", file=sys.stderr)
-        return False
+AGENT ADDRESS: {btc_address}
+BEAT: {beat}
+SLOT: {SLOT_LABEL.get(slot, str(slot))}
+PRIMARY SKILL FOR THIS SLOT: {skill}
+PUBLISHER REVIEWING YOUR SIGNAL: Rising Leviathan (Claude Code agent)
 
-
-# ── Signal submission ────────────────────────────────────────────────────────
-
-def submit_signal(signal: dict, btc_address: str) -> bool:
-    """Submit the generated signal to aibtc.news."""
-    payload = {
-        "btcAddress": btc_address,
-        "slot": signal.get("slot"),
-        "type": signal.get("type"),
-        "headline": signal.get("headline", ""),
-        "body": signal.get("body", ""),
-        "tags": signal.get("tags", []),
-        "sources": signal.get("sources", []),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-    try:
-        resp = requests.post(f"{AIBTC_API}/signals", json=payload, headers=HEADERS, timeout=15)
-        if resp.status_code in (200, 201):
-            print(f"  [signal] ✓ Submitted: {signal.get('headline', '')[:60]}")
-            return True
-        else:
-            print(f"  [signal] Submit failed {resp.status_code}: {resp.text[:200]}", file=sys.stderr)
-            return False
-    except Exception as e:
-        print(f"  [signal] Submit error: {e}", file=sys.stderr)
-        return False
-
-
-# ── Log ──────────────────────────────────────────────────────────────────────
-
-def append_log(log_path: str, slot: int, signal: dict, heartbeat_ok: bool, submit_ok: bool):
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    headline = signal.get("headline", "(no headline)")
-    signal_type = signal.get("type", "unknown")
-    tags = ", ".join(signal.get("tags", []))
-    body_preview = signal.get("body", "")[:300].replace("\n", " ")
-
-    entry = f"""
+---
+SCRAPED SOURCES ({len(articles)} articles, ranked by relevance to your beat):
+{source_block}
 ---
 
-## Slot {slot} — {ts}
+YOUR TASK — follow this sequence exactly. Do not skip any step.
 
-**Type:** {signal_type}
-**Headline:** {headline}
-**Tags:** {tags}
-**Heartbeat:** {"✓" if heartbeat_ok else "✗"}
-**Signal submitted:** {"✓" if submit_ok else "✗ (logged only)"}
+STEP 1: IDENTIFY THE BEST CANDIDATE
+Review the scraped sources above. Select the ONE article that:
+- Is directly relevant to your beat: {beat}
+- Has a primary, verifiable URL (not an aggregator)
+- Represents a genuine development, not opinion or rehash
+- Was published within the last 48 hours
 
-{body_preview}{"..." if len(signal.get("body","")) > 300 else ""}
+State which article you selected and why in one sentence.
+
+STEP 2: VERIFY THE FACTS
+Before writing anything, verify the key factual claims in the selected article.
+Use the aibtc-news-fact-checker skill to check every claim you plan to include.
+List each claim and its verification status (verified / unverified / contradicted).
+
+If any core claim is unverified or contradicted:
+- Discard that article
+- Select the next best candidate from the list
+- Repeat verification
+
+Do NOT proceed to Step 3 until all claims in your chosen article are verified.
+
+STEP 3: WRITE THE SIGNAL
+Write the signal using ONLY this format — no deviations:
+
+HEADLINE: [one sentence, under 15 words, factual, no hype, no opinion]
+SUMMARY: [exactly 2–3 sentences: (1) what happened, (2) why it matters for {beat}, (3) what comes next or what to watch]
+SOURCE: [direct URL to the primary source — no aggregators, no newsletters]
+BEAT: {beat}
+
+Rules for the headline:
+- State a specific fact, not a vague claim
+- No words like "revolutionary", "game-changing", "landmark", "major"
+- No questions
+
+Rules for the summary:
+- Sentence 1: the core event or finding, with numbers where they exist
+- Sentence 2: why this matters specifically to {beat}
+- Sentence 3: implication, next step, or what to watch
+
+STEP 4: QUALITY GATE
+Before submitting, answer each of these with YES or NO.
+If any answer is NO, revise the signal or discard and start over.
+
+1. Headline under 15 words?
+2. Headline states a specific verifiable fact?
+3. Source is a primary source (not aggregator)?
+4. All claims in summary passed fact-check?
+5. Summary has exactly 3 sentences covering what/why/next?
+6. Story is new — not a repeat of a previously filed signal?
+7. Would a crypto-native analyst consider this worth reading?
+
+Only proceed if all 7 answers are YES.
+
+STEP 5: SUBMIT
+Use aibtc-news-correspondent to submit the signal.
+Confirm submission and note any response from the publisher.
+
+STEP 6: OUTPUT YOUR LOG ENTRY
+After submission, output exactly one line in this format for the log:
+LOG_ENTRY: [UTC timestamp] | slot {slot} | {beat} | [headline] | [source URL] | submitted
+
+Do not output anything else after LOG_ENTRY.
 """
+
+
+def submit_via_claude_cli(prompt: str, log_path: str) -> bool:
+    """
+    Shells out to the `claude` CLI with the MCP server active.
+    Captures the LOG_ENTRY line and appends it to news-log.md.
+    """
+    print("Sending prompt to Claude Code agent...")
+
+    try:
+        result = subprocess.run(
+            ["claude", "--print", prompt],
+            capture_output=True,
+            text=True,
+            timeout=600,  # 10 min max
+            env={**os.environ, "NETWORK": "mainnet"},
+        )
+    except subprocess.TimeoutExpired:
+        print("[error] Claude CLI timed out after 10 minutes.")
+        return False
+    except FileNotFoundError:
+        print("[error] claude CLI not found. Is Claude Code installed?")
+        return False
+
+    output = result.stdout
+    print("\n--- Agent output ---")
+    print(output[:3000])  # print first 3000 chars for the Action log
+    if result.stderr:
+        print("[stderr]", result.stderr[:500])
+
+    # Extract and append the log entry
+    for line in output.splitlines():
+        if line.startswith("LOG_ENTRY:"):
+            entry = line.replace("LOG_ENTRY:", "").strip()
+            with open(log_path, "a") as f:
+                f.write(entry + "\n")
+            print(f"\nLogged: {entry}")
+            return True
+
+    print("[warn] No LOG_ENTRY found in agent output. Signal may not have been submitted.")
+    # Log a failure entry anyway
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     with open(log_path, "a") as f:
-        f.write(entry)
-    print(f"  [log] Appended to {log_path}")
+        f.write(f"{ts} | slot ? | error — no LOG_ENTRY in output\n")
+    return False
 
 
-# ── Main ─────────────────────────────────────────────────────────────────────
+def check_todays_count(log_path: str) -> int:
+    """Count how many signals have been filed today."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%dT")
+    try:
+        with open(log_path) as f:
+            return sum(1 for line in f if today in line and "error" not in line)
+    except FileNotFoundError:
+        return 0
+
 
 def main():
-    parser = argparse.ArgumentParser(description="Run Serene Spring signal agent")
-    parser.add_argument("--slot", type=int, required=True)
-    parser.add_argument("--sources", type=str, required=True, help="Path to raw_sources.json")
-    parser.add_argument("--beat", type=str, default="all")
-    parser.add_argument("--primary-skill", type=str, default="")
-    parser.add_argument("--btc-address", type=str, default="")
-    parser.add_argument("--log", type=str, default="news-log.md")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--slot",          type=int,   required=True)
+    parser.add_argument("--sources",       type=str,   required=True)
+    parser.add_argument("--beat",          type=str,   required=True)
+    parser.add_argument("--primary-skill", type=str,   required=True)
+    parser.add_argument("--btc-address",   type=str,   required=True)
+    parser.add_argument("--log",           type=str,   default="news-log.md")
     args = parser.parse_args()
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        print("[agent] ERROR: ANTHROPIC_API_KEY not set", file=sys.stderr)
-        sys.exit(1)
+    # Safety: never exceed 6 signals per UTC day
+    count = check_todays_count(args.log)
+    if count >= 6:
+        print(f"[abort] Already filed {count} signals today. Limit is 6. Exiting.")
+        sys.exit(0)
 
-    # Load sources
+    # Load scraped sources
     with open(args.sources) as f:
-        sources = json.load(f)
+        data = json.load(f)
 
-    # Build prompt
-    system_prompt = SLOT_PROMPTS.get(args.slot, SLOT_PROMPTS[2])
-    if args.primary_skill:
-        system_prompt += f"\n\nYour primary skill for today is: {args.primary_skill}"
-    system_prompt += f"\n\nYour beat: {args.beat}"
+    articles = data.get("articles", [])
+    if not articles:
+        print("[abort] No articles in source file. Nothing to file.")
+        sys.exit(0)
 
-    user_message = f"Here are today's sources for slot {args.slot}:\n\n{json.dumps(sources, indent=2, default=str)[:8000]}"
+    print(f"Slot {args.slot} | Beat: {args.beat} | {len(articles)} candidate articles")
+    print(f"Signals filed today so far: {count}/6")
 
-    print(f"[agent] Running slot {args.slot} ({sources.get('type','?')}) — beat: {args.beat}")
+    prompt = build_prompt(
+        slot=args.slot,
+        beat=args.beat,
+        primary_skill=args.primary_skill,
+        btc_address=args.btc_address,
+        articles=articles,
+    )
 
-    # Call Claude
-    client = anthropic.Anthropic(api_key=api_key)
-    try:
-        message = client.messages.create(
-            model="claude-opus-4-5",
-            max_tokens=1024,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_message}]
-        )
-        raw_output = message.content[0].text.strip()
-        print(f"  [agent] Claude responded ({len(raw_output)} chars)")
-    except Exception as e:
-        print(f"  [agent] Claude API error: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    # Parse JSON signal
-    signal = {}
-    try:
-        # Strip markdown code fences if present
-        clean = raw_output
-        if clean.startswith("```"):
-            clean = clean.split("\n", 1)[1]
-        if clean.endswith("```"):
-            clean = clean.rsplit("```", 1)[0]
-        signal = json.loads(clean.strip())
-        print(f"  [agent] Signal parsed: {signal.get('headline','')[:60]}")
-    except json.JSONDecodeError:
-        print(f"  [agent] JSON parse failed — saving raw output", file=sys.stderr)
-        signal = {
-            "slot": args.slot, "type": "raw", "headline": f"Slot {args.slot} signal",
-            "body": raw_output, "tags": ["raw"], "sources": []
-        }
-
-    # Heartbeat
-    heartbeat_ok = False
-    if args.btc_address:
-        heartbeat_ok = send_heartbeat(args.btc_address)
-
-    # Submit signal
-    submit_ok = False
-    if args.btc_address:
-        submit_ok = submit_signal(signal, args.btc_address)
-
-    # Log
-    append_log(args.log, args.slot, signal, heartbeat_ok, submit_ok)
-
-    print(f"[agent] Done — slot {args.slot} complete")
+    success = submit_via_claude_cli(prompt, args.log)
+    sys.exit(0 if success else 1)
 
 
 if __name__ == "__main__":

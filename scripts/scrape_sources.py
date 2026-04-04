@@ -1,225 +1,198 @@
 #!/usr/bin/env python3
 """
-scrape_sources.py — Fetch raw signal sources for Serene Spring based on slot + beat.
+scrape_sources.py
 
-Slots:
-  1 → arXiv AI/Bitcoin/agent research
-  2 → RSS feeds (beat primary)
-  3 → Stacks/BTC market data (Tenero + Hiro)
-  4 → RSS feeds (beat primary, second pass)
-  5 → AIBTC network activity (scout)
-  6 → Deal flow signals (bounties, ordinals, x402)
+Pulls fresh content from leading web3 and AI media outlets.
+Maps each slot to the source types most likely to yield
+approved signals on that beat.
+
+Sources are fetched via RSS (no API keys needed for most).
+Output is a JSON file consumed by run_agent.py.
 """
 
 import argparse
 import json
 import time
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import urllib.request
+import urllib.error
 
 try:
-    import requests
     import feedparser
 except ImportError:
-    print("Missing deps. Run: pip install requests feedparser", file=sys.stderr)
+    print("feedparser not installed. Run: pip install feedparser")
     sys.exit(1)
 
-HEADERS = {"User-Agent": "SereneSpring/1.0 (aibtc.news correspondent)"}
 
-# ── RSS feeds by beat ───────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Source registry
+# All RSS — no auth required. Add/remove freely.
+# ---------------------------------------------------------------------------
 
-FEEDS = {
-    "bitcoin-defi-stacks": [
-        "https://stacks.org/feed",
-        "https://blog.bitflow.finance/rss",
-        "https://www.hiro.so/blog/rss.xml",
-        "https://learnmeabitcoin.com/feed",
+SOURCES = {
+    "research": [
+        # arXiv CS.CR (crypto/security), CS.AI, and q-fin
+        {"name": "arXiv cs.CR", "url": "https://rss.arxiv.org/rss/cs.CR", "type": "arxiv"},
+        {"name": "arXiv cs.AI",  "url": "https://rss.arxiv.org/rss/cs.AI",  "type": "arxiv"},
+        {"name": "arXiv q-fin",  "url": "https://rss.arxiv.org/rss/q-fin",  "type": "arxiv"},
+        {"name": "SSRN crypto",  "url": "https://papers.ssrn.com/rss/hrd_sub.cfm?per=9&ncd=crypto", "type": "paper"},
     ],
-    "ordinals-runes": [
-        "https://ordinalhub.com/feed",
-        "https://runealpha.xyz/rss",
-        "https://www.ord.io/feed",
+    "web3_protocol": [
+        {"name": "The Block",        "url": "https://www.theblock.co/rss.xml",                   "type": "media"},
+        {"name": "Decrypt",          "url": "https://decrypt.co/feed",                           "type": "media"},
+        {"name": "CoinDesk",         "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",   "type": "media"},
+        {"name": "Blockworks",       "url": "https://blockworks.co/feed",                        "type": "media"},
+        {"name": "Bitcoin Magazine",  "url": "https://bitcoinmagazine.com/.rss/full/",           "type": "media"},
+        {"name": "Messari Research", "url": "https://messari.io/rss",                            "type": "research"},
+        {"name": "DeFi Llama blog",  "url": "https://defillama.com/blog/rss.xml",                "type": "on-chain"},
     ],
-    "ai-agent-economy": [
-        "https://aibtc.com/rss",
-        "https://venturebeat.com/category/ai/feed/",
-        "https://www.coindesk.com/arc/outboundfeeds/rss/",
+    "ai_general": [
+        {"name": "Hacker News AI",   "url": "https://hnrss.org/newest?q=AI+agent+bitcoin",      "type": "community"},
+        {"name": "VentureBeat AI",   "url": "https://venturebeat.com/category/ai/feed/",         "type": "media"},
+        {"name": "MIT Tech Review",  "url": "https://www.technologyreview.com/feed/",            "type": "media"},
+        {"name": "Import AI",        "url": "https://importai.substack.com/feed",                "type": "newsletter"},
+        {"name": "Last Week in AI",  "url": "https://lastweekin.ai/feed",                        "type": "newsletter"},
     ],
-    # fallback — all three combined
-    "all": [
-        "https://stacks.org/feed",
-        "https://www.hiro.so/blog/rss.xml",
-        "https://aibtc.com/rss",
-        "https://www.coindesk.com/arc/outboundfeeds/rss/",
-        "https://venturebeat.com/category/ai/feed/",
+    "market_onchain": [
+        {"name": "Glassnode blog",   "url": "https://insights.glassnode.com/rss/",              "type": "on-chain"},
+        {"name": "Dune blog",        "url": "https://dune.com/blog/rss.xml",                    "type": "on-chain"},
+        {"name": "Token Terminal",   "url": "https://tokenterminal.com/blog/rss.xml",           "type": "on-chain"},
+        {"name": "Kaito",            "url": "https://blog.kaito.ai/rss",                        "type": "on-chain"},
+    ],
+    "deals_ecosystem": [
+        {"name": "CrunchBase crypto", "url": "https://news.crunchbase.com/tag/cryptocurrency/feed/", "type": "deals"},
+        {"name": "The Block deals",   "url": "https://www.theblock.co/rss.xml",                      "type": "deals"},
+        {"name": "Blockworks deals",  "url": "https://blockworks.co/feed",                           "type": "deals"},
+    ],
+}
+
+# Slot → which source buckets to pull from
+SLOT_SOURCE_MAP = {
+    1: ["research"],                        # 06:00 UTC — arxiv + papers
+    2: ["web3_protocol", "ai_general"],     # 09:00 UTC — beat sweep
+    3: ["market_onchain"],                  # 12:00 UTC — on-chain data
+    4: ["web3_protocol", "research"],       # 15:00 UTC — second beat sweep
+    5: ["web3_protocol", "ai_general"],     # 18:00 UTC — scout / breaking
+    6: ["deals_ecosystem", "web3_protocol"],# 21:00 UTC — deal flow wrap
+}
+
+# Beat → keywords to filter articles for relevance
+BEAT_KEYWORDS = {
+    "DeFi and Protocol Updates": [
+        "defi", "protocol", "liquidity", "tvl", "amm", "yield", "vault",
+        "lending", "dex", "swap", "uniswap", "aave", "compound", "staking",
+    ],
+    "Smart Contract Security": [
+        "exploit", "vulnerability", "audit", "hack", "reentrancy", "bug",
+        "security", "smart contract", "solidity", "clarity", "erc",
+    ],
+    "AI Agent Economy": [
+        "ai agent", "autonomous agent", "agentic", "llm", "claude", "gpt",
+        "mcp", "x402", "agent economy", "ai wallet", "machine payment",
+    ],
+    "Bitcoin Infrastructure": [
+        "bitcoin", "btc", "lightning", "taproot", "ordinals", "runes",
+        "sbtc", "stacks", "layer 2", "l2", "rgb", "ark",
+    ],
+    "Bitcoin Macro": [
+        "bitcoin", "macro", "etf", "institutional", "federal reserve",
+        "inflation", "treasury", "sovereign", "adoption", "halving",
     ],
 }
 
 
-def fetch_rss(beat: str, max_items: int = 10) -> list[dict]:
-    key = beat.lower().replace(" ", "-").replace("&", "").replace("  ", "-")
-    urls = FEEDS.get(key, FEEDS["all"])
-    items = []
-    for url in urls:
-        try:
-            feed = feedparser.parse(url)
-            for entry in feed.entries[:max_items]:
-                items.append({
-                    "source": feed.feed.get("title", url),
-                    "title": entry.get("title", ""),
-                    "summary": entry.get("summary", "")[:500],
-                    "link": entry.get("link", ""),
-                    "published": entry.get("published", ""),
-                })
-        except Exception as e:
-            print(f"  [warn] RSS fetch failed for {url}: {e}", file=sys.stderr)
-    return items[:20]
-
-
-def fetch_arxiv(max_results: int = 8) -> list[dict]:
-    """Fetch recent arXiv papers on LLMs, autonomous agents, Bitcoin."""
-    query = "ti:(bitcoin+OR+stacks+OR+autonomous+agents+OR+LLM+OR+AI+agents)"
-    url = (
-        f"http://export.arxiv.org/api/query"
-        f"?search_query={query}&start=0&max_results={max_results}"
-        f"&sortBy=submittedDate&sortOrder=descending"
-    )
+def fetch_feed(source: dict, max_age_hours: int = 48) -> list[dict]:
+    """Fetch and filter a single RSS feed. Returns list of article dicts."""
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
-        feed = feedparser.parse(resp.text)
-        return [
-            {
-                "source": "arXiv",
-                "title": e.get("title", "").replace("\n", " "),
-                "summary": e.get("summary", "")[:600].replace("\n", " "),
-                "link": e.get("link", ""),
-                "published": e.get("published", ""),
-                "authors": [a.get("name", "") for a in e.get("authors", [])[:3]],
-            }
-            for e in feed.entries
-        ]
+        feed = feedparser.parse(source["url"])
     except Exception as e:
-        print(f"  [warn] arXiv fetch failed: {e}", file=sys.stderr)
+        print(f"  [warn] failed to parse {source['name']}: {e}")
         return []
 
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+    articles = []
 
-def fetch_stacks_market() -> dict:
-    """Fetch current Stacks network stats from Hiro API."""
-    data = {}
-    endpoints = {
-        "network_status": "https://api.hiro.so/extended/v1/status",
-        "stx_supply": "https://api.hiro.so/extended/v1/stx_supply",
-        "recent_blocks": "https://api.hiro.so/extended/v1/block?limit=5",
-        "mempool_stats": "https://api.hiro.so/extended/v1/tx/mempool/stats",
-    }
-    for key, url in endpoints.items():
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=10)
-            if resp.status_code == 200:
-                data[key] = resp.json()
-        except Exception as e:
-            print(f"  [warn] Hiro API {key} failed: {e}", file=sys.stderr)
-    return data
+    for entry in feed.entries[:20]:  # cap at 20 per source
+        # Parse published date
+        pub = None
+        if hasattr(entry, "published_parsed") and entry.published_parsed:
+            pub = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+        elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
+            pub = datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc)
 
+        if pub and pub < cutoff:
+            continue  # too old
 
-def fetch_aibtc_activity() -> list[dict]:
-    """Fetch recent AIBTC network activity — agents, signals, bounties."""
-    items = []
-    endpoints = [
-        ("https://aibtc.com/api/agents/recent", "recent_agents"),
-        ("https://aibtc.com/api/signals/recent", "recent_signals"),
-        ("https://aibtc.com/api/bounties/open", "open_bounties"),
-    ]
-    for url, label in endpoints:
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=10)
-            if resp.status_code == 200:
-                payload = resp.json()
-                if isinstance(payload, list):
-                    items.extend([{**item, "_source": label} for item in payload[:5]])
-                elif isinstance(payload, dict):
-                    items.append({**payload, "_source": label})
-        except Exception as e:
-            print(f"  [warn] AIBTC API {label} failed: {e}", file=sys.stderr)
-    return items
+        articles.append({
+            "title":   getattr(entry, "title",   "").strip(),
+            "url":     getattr(entry, "link",    "").strip(),
+            "summary": getattr(entry, "summary", "")[:500].strip(),
+            "source":  source["name"],
+            "type":    source["type"],
+            "published": pub.isoformat() if pub else None,
+        })
+
+    return articles
 
 
-def fetch_deal_flow() -> list[dict]:
-    """Fetch ordinals trades, x402 payments, bounty completions."""
-    items = []
-    endpoints = [
-        ("https://aibtc.com/api/deals/recent", "deals"),
-        ("https://aibtc.com/api/x402/recent", "x402_payments"),
-        ("https://aibtc.com/api/bounties/completed", "completed_bounties"),
-        ("https://ordinalhub.com/api/recent-trades", "ordinal_trades"),
-    ]
-    for url, label in endpoints:
-        try:
-            resp = requests.get(url, headers=HEADERS, timeout=10)
-            if resp.status_code == 200:
-                payload = resp.json()
-                if isinstance(payload, list):
-                    items.extend([{**item, "_source": label} for item in payload[:5]])
-        except Exception as e:
-            print(f"  [warn] Deal flow {label} failed: {e}", file=sys.stderr)
-    return items
+def score_relevance(article: dict, beat: str) -> int:
+    """Return keyword match count for a given beat."""
+    keywords = BEAT_KEYWORDS.get(beat, [])
+    text = (article["title"] + " " + article["summary"]).lower()
+    return sum(1 for kw in keywords if kw in text)
 
-
-# ── Slot dispatcher ──────────────────────────────────────────────────────────
-
-def scrape(slot: int, beat: str) -> dict:
-    ts = datetime.now(timezone.utc).isoformat()
-    print(f"[scrape] slot={slot} beat='{beat}' at {ts}")
-
-    if slot == 1:
-        print("  → arXiv research fetch")
-        sources = fetch_arxiv(max_results=10)
-        return {"slot": slot, "type": "arxiv", "beat": beat, "timestamp": ts, "items": sources}
-
-    elif slot in (2, 4):
-        print(f"  → RSS beat feeds (slot {slot})")
-        sources = fetch_rss(beat, max_items=8)
-        return {"slot": slot, "type": "rss_beat", "beat": beat, "timestamp": ts, "items": sources}
-
-    elif slot == 3:
-        print("  → Stacks market data (Tenero + Hiro)")
-        market = fetch_stacks_market()
-        rss = fetch_rss(beat, max_items=5)
-        return {"slot": slot, "type": "market", "beat": beat, "timestamp": ts,
-                "market": market, "items": rss}
-
-    elif slot == 5:
-        print("  → AIBTC network scout")
-        sources = fetch_aibtc_activity()
-        rss = fetch_rss("ai-agent-economy", max_items=5)
-        return {"slot": slot, "type": "scout", "beat": beat, "timestamp": ts,
-                "network": sources, "items": rss}
-
-    elif slot == 6:
-        print("  → Deal flow signals")
-        sources = fetch_deal_flow()
-        return {"slot": slot, "type": "deal_flow", "beat": beat, "timestamp": ts, "items": sources}
-
-    else:
-        return {"slot": slot, "type": "unknown", "beat": beat, "timestamp": ts, "items": []}
-
-
-# ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Scrape sources for AIBTC News Agent")
-    parser.add_argument("--slot", type=int, required=True, help="Signal slot 1-6")
-    parser.add_argument("--beat", type=str, default="all", help="Agent beat/topic")
-    parser.add_argument("--output", type=str, default="raw_sources.json", help="Output JSON path")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--slot",   type=int, required=True, help="1–6")
+    parser.add_argument("--beat",   type=str, required=True)
+    parser.add_argument("--output", type=str, default="raw_sources.json")
     args = parser.parse_args()
 
-    data = scrape(args.slot, args.beat)
+    buckets = SLOT_SOURCE_MAP.get(args.slot, [])
+    if not buckets:
+        print(f"No sources mapped for slot {args.slot}. Exiting.")
+        sys.exit(0)
+
+    print(f"Slot {args.slot} | Beat: {args.beat}")
+    print(f"Pulling from buckets: {', '.join(buckets)}")
+
+    all_articles = []
+    seen_urls = set()
+
+    for bucket in buckets:
+        for source in SOURCES.get(bucket, []):
+            print(f"  Fetching: {source['name']} ...")
+            articles = fetch_feed(source)
+            for a in articles:
+                if a["url"] not in seen_urls:
+                    seen_urls.add(a["url"])
+                    a["relevance_score"] = score_relevance(a, args.beat)
+                    all_articles.append(a)
+            time.sleep(0.5)  # be polite
+
+    # Sort by relevance desc, then recency
+    all_articles.sort(key=lambda x: (-x["relevance_score"], x["published"] or ""))
+
+    # Keep top 20 most relevant for the agent
+    top = all_articles[:20]
+
+    output = {
+        "slot": args.slot,
+        "beat": args.beat,
+        "scraped_at": datetime.now(timezone.utc).isoformat(),
+        "total_fetched": len(all_articles),
+        "articles": top,
+    }
 
     with open(args.output, "w") as f:
-        json.dump(data, f, indent=2, default=str)
+        json.dump(output, f, indent=2)
 
-    item_count = len(data.get("items", [])) + len(data.get("network", []))
-    print(f"[scrape] Done — {item_count} items written to {args.output}")
+    print(f"\nDone. {len(all_articles)} articles fetched, top {len(top)} written to {args.output}.")
+    print("Top 5 by relevance:")
+    for a in top[:5]:
+        print(f"  [{a['relevance_score']}] {a['title'][:80]} — {a['source']}")
 
 
 if __name__ == "__main__":
