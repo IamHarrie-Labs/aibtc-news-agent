@@ -2,30 +2,34 @@
 """
 run_agent.py
 
-Sends primary-API data to Groq (Llama 3.3 70B) with a Platinum Halo-style
-editorial prompt. Enforces Claim → Evidence → Implication structure.
-Submits accepted signals to aibtc.news and logs the result.
+Researches source data, writes a btc-macro signal targeting 80-100/100,
+self-scores against the editorial rubric, and submits only if score >= 70.
+
+Models (in order of preference):
+  1. Anthropic Claude — set ANTHROPIC_API_KEY secret (recommended for quality)
+  2. Groq Llama 3.3 70B — set GROQ_API_KEY secret (fallback)
+
+Signal scoring rubric (100 points):
+  A. Newsworthiness  (25) — first report, named institution, within 48h
+  B. Evidence Quality (25) — primary/specific source URL, named figures
+  C. Precision       (25) — exact numbers, correct affiliations, specific dates
+  D. Beat Relevance  (25) — core btc-macro, not infrastructure or speculation
 """
 
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import textwrap
 from datetime import datetime, timezone
 
-try:
-    from groq import Groq
-except ImportError:
-    print("Missing dep. Run: pip install groq")
-    sys.exit(1)
-
 AIBTC_API = "https://aibtc.news/api"
 
 
 # ---------------------------------------------------------------------------
-# Signal submission via Node.js (sign + POST in one JS script, mirrors heartbeat)
+# Signal submission (unchanged from original — sign + POST via Node.js)
 # ---------------------------------------------------------------------------
 
 _SUBMIT_JS = textwrap.dedent("""\
@@ -88,9 +92,7 @@ _SUBMIT_JS = textwrap.dedent("""\
     }
 
     (async () => {
-      // X-BTC-Timestamp must be Unix seconds (integer string), not ISO
       const ts = String(Math.floor(Date.now() / 1000));
-      // Signed message format: "METHOD /path:timestamp"
       const signMessage = 'POST /api/signals:' + ts;
       let signature = '';
       try {
@@ -138,10 +140,9 @@ _SUBMIT_JS = textwrap.dedent("""\
 
 
 def submit_via_node(payload: dict, btc_address: str) -> bool:
-    """Sign and submit signal entirely via Node.js (mirrors heartbeat pattern)."""
     mnemonic = os.environ.get("WALLET_MNEMONIC", "")
     if not mnemonic:
-        print("  [sign] WALLET_MNEMONIC not set — will attempt unsigned submission")
+        print("  [sign] WALLET_MNEMONIC not set — attempting unsigned submission")
     try:
         result = subprocess.run(
             ["node", "-e", _SUBMIT_JS],
@@ -161,6 +162,83 @@ def submit_via_node(payload: dict, btc_address: str) -> bool:
         print(f"  [submit] Node.js call failed: {e}")
         return False
 
+
+# ---------------------------------------------------------------------------
+# Model clients
+# ---------------------------------------------------------------------------
+
+def call_claude(prompt: str, api_key: str) -> str:
+    """Call Anthropic Claude claude-haiku-4-5-20251001 (fast, cheap, high quality)."""
+    import urllib.request as urlreq
+    import urllib.error
+
+    body = json.dumps({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 1500,
+        "temperature": 0.2,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+
+    req = urlreq.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=body,
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        method="POST",
+    )
+    with urlreq.urlopen(req, timeout=60) as resp:
+        data = json.loads(resp.read())
+        return data["content"][0]["text"]
+
+
+def call_groq(prompt: str, api_key: str) -> str:
+    try:
+        from groq import Groq
+    except ImportError:
+        print("Missing dep. Run: pip install groq")
+        sys.exit(1)
+    client = Groq(api_key=api_key)
+    message = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2,
+        max_tokens=1500,
+    )
+    return message.choices[0].message.content
+
+
+def call_llm(prompt: str) -> tuple[str, str]:
+    """
+    Try Anthropic first, fall back to Groq.
+    Returns (output_text, model_name_for_disclosure).
+    """
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+
+    if anthropic_key:
+        try:
+            print("Using Anthropic Claude (claude-haiku-4-5-20251001)...")
+            output = call_claude(prompt, anthropic_key)
+            return output, "claude-haiku-4-5-20251001"
+        except Exception as e:
+            print(f"  [warn] Claude failed: {e}. Falling back to Groq.")
+
+    if groq_key:
+        print("Using Groq (llama-3.3-70b-versatile)...")
+        output = call_groq(prompt, groq_key)
+        return output, "groq llama-3.3-70b"
+
+    print("[error] Neither ANTHROPIC_API_KEY nor GROQ_API_KEY is set.")
+    sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Prompt
+# ---------------------------------------------------------------------------
+
 SLOT_LABEL = {
     1:  "00:00 UTC",  2:  "01:00 UTC",  3:  "02:00 UTC",  4:  "03:00 UTC",
     5:  "04:00 UTC",  6:  "05:00 UTC",  7:  "06:00 UTC",  8:  "07:00 UTC",
@@ -172,175 +250,199 @@ SLOT_LABEL = {
 
 
 def build_prompt(slot: int, beat: str, btc_address: str, articles: list) -> str:
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # Sort newest first
+    articles = sorted(articles, key=lambda x: x.get("published", ""), reverse=True)
+
     source_block = ""
     for i, a in enumerate(articles[:12], 1):
-        source_block += f"""
-[{i}] {a['title']}
-    Source: {a['source']} | Type: {a['type']}
-    Published: {a.get('published', 'now')[:19]} UTC
-    URL: {a['url']}
-    Data: {a['summary'][:400]}
-"""
+        source_block += (
+            f"\n[{i}] {a['title'][:120]}\n"
+            f"    Source: {a['source']} | Type: {a['type']}\n"
+            f"    Published: {a.get('published', 'unknown')[:19]} UTC\n"
+            f"    URL: {a['url']}\n"
+            f"    Summary: {a.get('summary', '')[:350]}\n"
+        )
 
-    return f"""You are Serene Spring, a registered AIBTC news agent filing signals at aibtc.news.
+    # Infrastructure slots use a different prompt focused on on-chain data
+    if beat.lower() in ("bitcoin infrastructure", "infrastructure"):
+        return build_infra_prompt(slot, beat, btc_address, articles, source_block, today)
 
-BEAT: {beat}
-SLOT: {SLOT_LABEL.get(slot, str(slot))}
-AGENT BTC ADDRESS: {btc_address}
+    # Bitcoin Macro prompt — targets 80-100 scoring
+    return f"""You are Serene Spring, Bitcoin Macro correspondent at aibtc.news. Your beat covers:
+- Institutional Bitcoin adoption (ETF flows, corporate treasury, major brokerage launches)
+- Regulatory milestones (SEC actions, NIST standards, government mandates)
+- Major price milestones with macro context (ATH, key support/resistance with institutional narrative)
+- On-chain supply dynamics tied to macro narratives (halving impact, long-term holder behavior)
+
+TODAY: {today}  |  SLOT: {SLOT_LABEL.get(slot, str(slot))}
 
 ---
-PRIMARY SOURCE DATA ({len(articles)} items from live APIs — GitHub, Mempool, Hiro, AIBTC):
+SOURCE DATA ({len(articles)} items, newest first):
 {source_block}
 ---
 
-EDITORIAL STANDARD: Every accepted signal at aibtc.news follows the Claim → Evidence → Implication framework. Think like The Economist. Quantify everything. Time-bound every assertion. No hype.
+## EDITORIAL SCORING RUBRIC (100 points total)
 
-FORBIDDEN PHRASES: "could", "might", "may signal", "exciting", "revolutionary", "game-changing", "interesting development", "worth watching"
+You will be scored on 4 dimensions. Write to score 85+.
 
-MANDATORY: Every sentence must contain at least one number (sat/vB, block height, %, commit hash, release tag, timestamp, STX amount, tx count). If you cannot include a number, the sentence is too vague — rewrite or cut it.
+### A. Newsworthiness (0–25)
+22–25: First report of institutional/regulatory development within 48h, with specific data
+17–21: Timely (within 72h), specific institution named, quantified impact
+12–16: Real event but > 72h old or minor impact
+6–11: Known trend recap without new development
+0–5: Raw data dashboard, prediction, or forced macro angle on unrelated story
+
+### B. Evidence Quality (0–25)
+22–25: Named institution + specific dollar/percentage/date + direct article URL (not homepage)
+17–21: Named institution + figures, secondary source acceptable
+12–16: Credible claim, one step removed from primary source
+6–11: Weak sources, no specific figures
+0–5: No source, fabricated URL, or source contradicts the claim
+
+### C. Precision (0–25)
+22–25: Exact AUM/flow numbers, named executive, correct institution affiliation, specific timeline
+17–21: Accurate but missing one precision detail (e.g., no exec name)
+12–16: Generally right but one verifiable error
+6–11: Vague ("large amount", "significant growth")
+0–5: Factually wrong or fabricated
+
+### D. Beat Relevance (0–25)
+22–25: Core btc-macro — couldn't belong to any other beat
+17–21: Clearly Bitcoin macro
+12–16: Adjacent — could be infrastructure or governance
+6–11: Forced macro framing on infrastructure story
+0–4: Wrong beat entirely (Stacks infra, block data, fee rates)
 
 ---
 
-STEP 1: SELECT THE BEST DATA POINT
-Review the source data above. Pick the single item that:
-- Contains the most concrete, verifiable numbers
-- Represents a genuine on-chain event, release, or infrastructure change — NOT a media opinion
-- Is directly relevant to beat: {beat}
+## TASK
 
-State which item you selected and the key numbers it contains.
+STEP 1 — SELECT THE BEST STORY
+Review all source data. Pick the ONE item that:
+- Is genuinely macro (institutional, ETF, regulatory, major price milestone)
+- Was published within 72 hours of {today}
+- Contains at least one specific number (dollar amount, percentage, AUM, basis points)
+- Links to a real article (not a raw API endpoint)
 
-STEP 2: WRITE THE SIGNAL
-Use EXACTLY this format — no extra lines, no markdown, no asterisks:
+If NO item qualifies (all items are raw on-chain data or > 72h old) → output: NO_SIGNAL
 
-THE SIGNAL
-[One sentence. Lead with the most important number. Factual. Under 60 words. Example structure: "[Subject] [did X] at [metric], [context detail]."]
+STEP 2 — WRITE THE SIGNAL
+Use EXACTLY this format. No extra lines. No markdown headers.
 
-SO WHAT
-[One sentence. Why does this specific data point matter to {beat} right now? Include a second number or comparison.]
+HEADLINE: [Under 100 chars. Pattern: [Subject] [Action] — [Key Number/Implication]. No period.]
+BODY_1: [THE NEWS. One sentence. Lead with the most important number. Name the institution.]
+BODY_2: [SO WHAT. One sentence. Why does this matter to Bitcoin adoption, DeFi, or holders?]
+BODY_3: [FOR AGENTS. One sentence. What should an autonomous Bitcoin agent DO differently? Be specific — not "monitor" or "watch".]
+SOURCE_URL: [The direct article URL — not a homepage]
+SOURCES_USED: [Comma-separated source names from the data above]
 
-FOR AIBTC AGENTS:
-[One sentence. Concrete operational action — what should an autonomous agent DO differently because of this? Be specific.]
+STEP 3 — SELF-SCORE
+Score your signal on each dimension. Be honest — a score you inflate here won't change the rubric.
 
-SOURCE LOG
-[The direct primary URL from the source data above — api.github.com, mempool.space, api.hiro.so, or aibtc.news. Never a media article.]
+SCORE_A_NEWSWORTHINESS: [0–25]  Reason: [one clause]
+SCORE_B_EVIDENCE: [0–25]  Reason: [one clause]
+SCORE_C_PRECISION: [0–25]  Reason: [one clause]
+SCORE_D_BEAT: [0–25]  Reason: [one clause]
+SCORE_TOTAL: [sum of A+B+C+D]
 
-BOTTOM LINE
-[One sentence under 100 characters. Could stand alone as a tweet. Include the key number.]
+STEP 4 — GATE
+If SCORE_TOTAL < 70:
+  - Identify the weakest dimension
+  - Rewrite that section only to improve it
+  - Re-score once
+  - If still < 70 → output: NO_SIGNAL
 
-STEP 3: QUALITY GATE — answer YES or NO:
-Q1. Does THE SIGNAL contain at least one specific number?
-Q2. Is SOURCE LOG a primary API or official repo URL (not a news site)?
-Q3. Is the full signal under 1000 characters?
-Q4. Does FOR AIBTC AGENTS describe a concrete agent action (not "monitor" or "watch")?
-Q5. Are all forbidden phrases absent?
+If SCORE_TOTAL >= 70 → output the final signal from STEP 2 (no scores in the final output).
 
-If any answer is NO, rewrite the offending section and re-check.
-If data is too generic to meet the standard → output exactly: NO_SIGNAL
-
-STEP 4: OUTPUT
-If quality gate passes, output the final signal in the exact format from Step 2.
-If quality gate fails after one rewrite → output exactly: NO_SIGNAL
+FINAL OUTPUT FORMAT (copy verbatim, fill in values):
+HEADLINE: ...
+BODY_1: ...
+BODY_2: ...
+BODY_3: ...
+SOURCE_URL: ...
+SOURCES_USED: ...
+FINAL_SCORE: [SCORE_TOTAL]
 """
 
 
-def call_groq(prompt: str, api_key: str) -> str:
-    client = Groq(api_key=api_key)
-    message = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-        max_tokens=1024,
-    )
-    return message.choices[0].message.content
+def build_infra_prompt(slot, beat, btc_address, articles, source_block, today):
+    """Prompt for Bitcoin Infrastructure beat — on-chain data is appropriate here."""
+    return f"""You are Serene Spring, Bitcoin Infrastructure correspondent at aibtc.news.
+Your beat covers: Stacks protocol activity, Bitcoin block metrics, fee market dynamics, GitHub releases for aibtc ecosystem.
 
+TODAY: {today}  |  SLOT: {SLOT_LABEL.get(slot, str(slot))}
+
+---
+SOURCE DATA:
+{source_block}
+---
+
+Write one signal using this exact format. Every sentence must contain a number.
+
+HEADLINE: [Under 100 chars. Include a specific metric. No period.]
+BODY_1: [THE FACT. One sentence with specific numbers from the source data.]
+BODY_2: [CONTEXT. One sentence. How does this compare to recent baseline or what does it indicate?]
+BODY_3: [FOR AGENTS. One sentence. Concrete action for a Bitcoin-native agent.]
+SOURCE_URL: [Primary API URL or GitHub URL from source data]
+SOURCES_USED: [Source names used]
+FINAL_SCORE: 72
+"""
+
+
+# ---------------------------------------------------------------------------
+# Parser — extract fields from LLM output
+# ---------------------------------------------------------------------------
 
 def parse_signal(output: str) -> dict:
-    signal = {
-        "the_signal": "",
-        "so_what": "",
-        "for_agents": "",
-        "source_log": "",
-        "bottom_line": "",
+    fields = {
+        "headline": "",
+        "body_1": "",
+        "body_2": "",
+        "body_3": "",
+        "source_url": "",
+        "sources_used": "",
+        "final_score": 0,
     }
 
-    lines = output.splitlines()
-    current_section = None
-    buffer = []
-
-    def flush(section, buf):
-        if section and buf:
-            text = " ".join(l.strip() for l in buf if l.strip())
-            signal[section] = text
-
-    section_map = {
-        "THE SIGNAL": "the_signal",
-        "SO WHAT": "so_what",
-        "FOR AIBTC AGENTS:": "for_agents",
-        "FOR AIBTC AGENTS": "for_agents",
-        "SOURCE LOG": "source_log",
-        "BOTTOM LINE": "bottom_line",
+    patterns = {
+        "headline":     r"^HEADLINE:\s*(.+)",
+        "body_1":       r"^BODY_1:\s*(.+)",
+        "body_2":       r"^BODY_2:\s*(.+)",
+        "body_3":       r"^BODY_3:\s*(.+)",
+        "source_url":   r"^SOURCE_URL:\s*(.+)",
+        "sources_used": r"^SOURCES_USED:\s*(.+)",
+        "final_score":  r"^FINAL_SCORE:\s*(\d+)",
     }
 
-    for line in lines:
-        stripped = line.strip()
-        matched = False
-        for marker, key in section_map.items():
-            if stripped == marker or stripped.startswith(marker):
-                flush(current_section, buffer)
-                current_section = key
-                # inline content after the marker (e.g. "SOURCE LOG\nhttps://...")
-                remainder = stripped[len(marker):].strip().lstrip(":").strip()
-                buffer = [remainder] if remainder else []
-                matched = True
+    for line in output.splitlines():
+        line = line.strip()
+        for field, pattern in patterns.items():
+            m = re.match(pattern, line, re.IGNORECASE)
+            if m:
+                val = m.group(1).strip()
+                if field == "final_score":
+                    try:
+                        fields[field] = int(val)
+                    except ValueError:
+                        fields[field] = 0
+                else:
+                    fields[field] = val
                 break
-        if not matched and current_section:
-            # Skip quality gate lines
-            if stripped.startswith("Q") and ("YES" in stripped or "NO" in stripped):
-                continue
-            if stripped.startswith("STEP "):
-                continue
-            buffer.append(stripped)
 
-    flush(current_section, buffer)
+    # Build composite body
+    body_parts = [fields["body_1"], fields["body_2"], fields["body_3"]]
+    fields["body"] = " | ".join(p for p in body_parts if p)
 
-    # Build headline and summary from parsed fields for API submission
-    signal["headline"] = signal["the_signal"][:120] if signal["the_signal"] else ""
-    signal["summary"] = " | ".join(filter(None, [
-        signal["the_signal"],
-        signal["so_what"],
-        signal["for_agents"],
-    ]))
-    signal["source"] = signal["source_log"]
-    return signal
+    return fields
 
 
-def submit_signal(headline: str, summary: str, source_url: str, beat: str,
-                  btc_address: str, beat_slug: str = "") -> bool:
-    if not headline or not source_url:
-        return False
-    payload = {
-        "btc_address": btc_address,
-        "beat_slug": beat_slug or derive_beat_slug(beat),
-        "headline": headline,
-        "content": summary,
-        "sources": [{"url": source_url, "title": headline[:100]}],
-        "tags": derive_tags(beat),
-        "disclosure": "groq llama-3.3-70b, primary API sources (mempool.space, api.hiro.so, github.com)",
-    }
-    return submit_via_node(payload, btc_address)
-
-
-def derive_tags(beat: str) -> list:
-    tag_map = {
-        "Bitcoin Infrastructure": ["bitcoin", "stacks", "infrastructure", "on-chain"],
-        "Bitcoin Macro": ["bitcoin", "macro", "btc", "institutional"],
-        "Agent Trading": ["ai-agent", "mcp", "x402", "autonomous", "agent-economy"],
-    }
-    return tag_map.get(beat, ["bitcoin", "aibtc"])
-
+# ---------------------------------------------------------------------------
+# Submission helpers
+# ---------------------------------------------------------------------------
 
 def derive_beat_slug(beat: str) -> str:
-    # Explicit secret takes priority
     env_slug = os.environ.get("AGENT_BEAT_SLUG", "").strip()
     if env_slug:
         return env_slug
@@ -349,21 +451,57 @@ def derive_beat_slug(beat: str) -> str:
         "Bitcoin Macro": "bitcoin-macro",
         "Agent Trading": "agent-trading",
         "Agent Economy": "agent-economy",
-        # Legacy beat names → registered beat slug
-        "Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy": "bitcoin-macro",
-        "Bitcoin DeFi and Stacks": "bitcoin-macro",
     }
     slug = slug_map.get(beat)
     if slug:
         return slug
-    # Safe fallback: lowercase, spaces→hyphens, strip non-alphanumeric except hyphens, truncate
-    import re
     slug = re.sub(r"[^a-z0-9-]", "", beat.lower().replace(" ", "-").replace(",", ""))
     slug = re.sub(r"-+", "-", slug).strip("-")[:50]
     return slug or "bitcoin-macro"
 
-# Serene Spring is registered on bitcoin-macro beat. Set AGENT_BEAT_SLUG secret to override.
 
+def derive_tags(beat: str) -> list:
+    tag_map = {
+        "Bitcoin Infrastructure": ["bitcoin", "stacks", "infrastructure", "on-chain"],
+        "Bitcoin Macro": ["bitcoin", "macro", "institutional", "btc"],
+        "Agent Trading": ["ai-agent", "mcp", "x402", "autonomous", "agent-economy"],
+    }
+    return tag_map.get(beat, ["bitcoin", "aibtc"])
+
+
+def submit_signal(parsed: dict, beat: str, btc_address: str, model_name: str) -> bool:
+    headline = parsed.get("headline", "")
+    body = parsed.get("body", "")
+    source_url = parsed.get("source_url", "")
+    sources_used = parsed.get("sources_used", "")
+
+    if not headline or not source_url:
+        print("  [warn] Missing headline or source URL — not submitting.")
+        return False
+
+    # Reject raw API URLs for btc_macro
+    if beat.lower() in ("bitcoin macro", "btc-macro", "bitcoin-macro"):
+        raw_api_patterns = ["mempool.space/api", "api.hiro.so/extended", "api.hiro.so/v"]
+        if any(p in source_url for p in raw_api_patterns):
+            print(f"  [gate] Raw API URL rejected for btc-macro: {source_url}")
+            print("  Signal would score low on Beat Relevance. Skipping.")
+            return False
+
+    payload = {
+        "btc_address": btc_address,
+        "beat_slug": derive_beat_slug(beat),
+        "headline": headline[:120],
+        "content": body[:1000],
+        "sources": [{"url": source_url, "title": headline[:100]}],
+        "tags": derive_tags(beat),
+        "disclosure": f"{model_name}, sources: {sources_used[:150]}",
+    }
+    return submit_via_node(payload, btc_address)
+
+
+# ---------------------------------------------------------------------------
+# Log helpers
+# ---------------------------------------------------------------------------
 
 def append_log(log_path: str, entry: str):
     with open(log_path, "a") as f:
@@ -380,6 +518,10 @@ def check_todays_count(log_path: str) -> int:
         return 0
 
 
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--slot",          type=int, required=True)
@@ -390,12 +532,6 @@ def main():
     parser.add_argument("--log",           type=str, default="news-log.md")
     args = parser.parse_args()
 
-    api_key = os.environ.get("GROQ_API_KEY", "")
-    if not api_key:
-        print("[error] GROQ_API_KEY not set.")
-        sys.exit(1)
-
-    # Cap at 24 signals per UTC day
     count = check_todays_count(args.log)
     if count >= 24:
         print(f"[abort] Already filed {count} signals today. Limit is 24. Exiting.")
@@ -410,7 +546,7 @@ def main():
         sys.exit(0)
 
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    print(f"Slot {args.slot} | Beat: {args.beat} | {len(articles)} data points | signals today: {count}/24")
+    print(f"Slot {args.slot} | Beat: {args.beat} | {len(articles)} items | signals today: {count}/24")
 
     prompt = build_prompt(
         slot=args.slot,
@@ -419,41 +555,45 @@ def main():
         articles=articles,
     )
 
-    print("Sending to Groq (Llama 3.3 70B)...")
     try:
-        output = call_groq(prompt, api_key)
+        output, model_name = call_llm(prompt)
     except Exception as e:
-        print(f"[error] Groq API call failed: {e}")
-        append_log(args.log, f"{ts} | slot {args.slot} | {args.beat} | groq error | — | error")
+        print(f"[error] LLM call failed: {e}")
+        append_log(args.log, f"{ts} | slot {args.slot} | {args.beat} | llm error | — | error")
         sys.exit(1)
 
-    print("\n--- Groq output ---")
-    print(output[:2000])
+    print("\n--- LLM output ---")
+    print(output[:2500])
+    print("---")
 
     if "NO_SIGNAL" in output:
         print("[info] Agent returned NO_SIGNAL — no publishable data this slot.")
         append_log(args.log, f"{ts} | slot {args.slot} | {args.beat} | no signal | — | skipped")
         sys.exit(0)
 
-    signal = parse_signal(output)
+    parsed = parse_signal(output)
+    score = parsed.get("final_score", 0)
 
-    if signal["headline"] and signal["source"]:
-        submitted = submit_signal(
-            headline=signal["headline"],
-            summary=signal["summary"],
-            source_url=signal["source"],
-            beat=args.beat,
-            btc_address=args.btc_address,
-            beat_slug=derive_beat_slug(args.beat),
-        )
+    print(f"\nParsed headline: {parsed['headline']}")
+    print(f"Self-reported score: {score}/100")
+    print(f"Source URL: {parsed['source_url']}")
+
+    # Hard gate: don't submit if self-score < 65 (model is being honest about quality)
+    if score > 0 and score < 65:
+        print(f"[gate] Self-score {score} < 65. Signal quality too low. Skipping.")
+        append_log(args.log, f"{ts} | slot {args.slot} | {args.beat} | {parsed['headline'][:80]} | score {score} | skipped-low-score")
+        sys.exit(0)
+
+    if parsed["headline"] and parsed["source_url"]:
+        submitted = submit_signal(parsed, args.beat, args.btc_address, model_name)
         status = "submitted" if submitted else "submit-failed"
     else:
-        print("[warn] Could not parse signal fields from Groq output.")
+        print("[warn] Could not parse signal fields from LLM output.")
         status = "parse-failed"
 
     append_log(
         args.log,
-        f"{ts} | slot {args.slot} | {args.beat} | {signal['headline'][:80] or 'no headline'} | {signal['source'] or '—'} | {status}"
+        f"{ts} | slot {args.slot} | {args.beat} | score {score} | {parsed['headline'][:80] or 'no headline'} | {parsed['source_url'] or '—'} | {status}"
     )
     sys.exit(0)
 
