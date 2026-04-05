@@ -35,3 +35,4 @@
 2026-04-05T15:06:34Z | slot 16 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 73 | AIBTC MCP Server Releases mcp-server-v1.46.3 — v1.46.3 | https://github.com/aibtcdev/aibtc-mcp-server/releases/tag/mcp-server-v1.46.3 | submitted
 2026-04-05T16:01:17Z | slot 17 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 92 | Charles Schwab Launches Bitcoin Waitlist — Q2 | https://www.theblock.co/post/396358/charles-schwab-opens-waitlist-for-direct-bitcoin-and-ether-trading-targeting-q2-limited-launch | submit-failed
 2026-04-05T17:51:29Z | slot 18 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | no signal | — | skipped
+2026-04-05T18:02:27Z | slot 19 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 85 | Bitflow Finance Updates Smart DCA — $100M | https://github.com/BitflowFinance/bff-skills/pull/205 | submit-failed
