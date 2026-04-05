@@ -21,102 +21,142 @@ except ImportError:
     print("Missing dep. Run: pip install groq")
     sys.exit(1)
 
-try:
-    import requests
-except ImportError:
-    print("Missing dep. Run: pip install requests")
-    sys.exit(1)
-
-
 AIBTC_API = "https://aibtc.news/api"
-HEADERS = {"Content-Type": "application/json", "User-Agent": "SereneSpring/1.0"}
 
 
 # ---------------------------------------------------------------------------
-# BTC signing via AIBTC MCP server (same pattern as heartbeat.yml)
+# Signal submission via Node.js (sign + POST in one JS script, mirrors heartbeat)
 # ---------------------------------------------------------------------------
 
-_SIGN_JS = textwrap.dedent("""\
+_SUBMIT_JS = textwrap.dedent("""\
+    const https = require('https');
     const { spawn } = require('child_process');
     const readline = require('readline');
 
     const mnemonic = process.env.WALLET_MNEMONIC;
     const password = process.env.WALLET_PASSWORD;
-    const message  = process.env.SIGN_MESSAGE;
+    const btcAddress = process.env.BTC_ADDRESS;
+    const payload   = JSON.parse(process.env.SIGNAL_PAYLOAD);
 
-    if (!mnemonic || !message) { process.stderr.write('Missing WALLET_MNEMONIC or SIGN_MESSAGE\\n'); process.exit(1); }
+    if (!mnemonic || !btcAddress) {
+      process.stderr.write('Missing WALLET_MNEMONIC or BTC_ADDRESS\\n');
+      process.exit(1);
+    }
 
-    const proc = spawn('aibtc-mcp-server', [], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, NETWORK: 'mainnet', CLIENT_MNEMONIC: mnemonic }
-    });
-    proc.stderr.on('data', () => {});
-
-    let reqId = 1;
-    const pending = {};
-    function send(method, params) {
-      return new Promise((res, rej) => {
-        const id = reqId++;
-        pending[id] = { res, rej };
-        proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\\n');
-        setTimeout(() => { if (pending[id]) { delete pending[id]; rej(new Error('Timeout: ' + method)); } }, 10000);
+    async function signTs(ts) {
+      return new Promise((resolve, reject) => {
+        const proc = spawn('aibtc-mcp-server', [], {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: { ...process.env, NETWORK: 'mainnet', CLIENT_MNEMONIC: mnemonic }
+        });
+        proc.stderr.on('data', () => {});
+        let reqId = 1;
+        const pending = {};
+        function send(method, params) {
+          return new Promise((res, rej) => {
+            const id = reqId++;
+            pending[id] = { res, rej };
+            proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\\n');
+            setTimeout(() => { if (pending[id]) { delete pending[id]; rej(new Error('Timeout: ' + method)); } }, 10000);
+          });
+        }
+        const rl = readline.createInterface({ input: proc.stdout });
+        rl.on('line', line => {
+          if (!line.trim() || !line.startsWith('{')) return;
+          try {
+            const m = JSON.parse(line);
+            if (m.id && pending[m.id]) { pending[m.id].res(m.result || m); delete pending[m.id]; }
+          } catch(e) {}
+        });
+        proc.on('error', e => { reject(e); });
+        setTimeout(async () => {
+          try {
+            await send('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'serene-spring', version: '1' } });
+            await send('notifications/initialized', {});
+            await send('tools/call', { name: 'wallet_import', arguments: { name: 'serene-spring', mnemonic, password, network: 'mainnet' } });
+            await send('tools/call', { name: 'wallet_unlock', arguments: { password } });
+            const r = await send('tools/call', { name: 'btc_sign_message', arguments: { message: ts } });
+            const text = r?.content?.[0]?.text || '';
+            const m = text.match(/"signature"\\s*:\\s*"([^"]+)"/) || text.match(/signature.*?\\\\"([^\\\\"]+)\\\\"/);
+            if (!m) throw new Error('No sig in: ' + text.slice(0, 80));
+            proc.kill();
+            resolve(m[1]);
+          } catch(err) { proc.kill(); reject(err); }
+        }, 400);
+        setTimeout(() => { proc.kill(); reject(new Error('sign timeout')); }, 25000);
       });
     }
-    const rl = readline.createInterface({ input: proc.stdout });
-    rl.on('line', (line) => {
-      if (!line.trim() || !line.startsWith('{')) return;
-      try {
-        const m = JSON.parse(line);
-        if (m.id && pending[m.id]) { pending[m.id].res(m.result || m); delete pending[m.id]; }
-      } catch(e) {}
-    });
-    proc.on('error', (e) => { process.stderr.write(e.message + '\\n'); process.exit(1); });
 
-    setTimeout(async () => {
+    (async () => {
+      const ts = new Date().toISOString();
+      let signature = '';
       try {
-        await send('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'serene-spring', version: '1' } });
-        await send('notifications/initialized', {});
-        await send('tools/call', { name: 'wallet_import', arguments: { name: 'serene-spring', mnemonic, password, network: 'mainnet' } });
-        await send('tools/call', { name: 'wallet_unlock', arguments: { password } });
-        const r = await send('tools/call', { name: 'btc_sign_message', arguments: { message } });
-        const text = r?.content?.[0]?.text || '';
-        const m = text.match(/"signature"\\s*:\\s*"([^"]+)"/) || text.match(/signature.*?\\\\"([^\\\\"]+)\\\\"/);
-        if (!m) throw new Error('No signature in: ' + text.slice(0, 100));
-        proc.kill();
-        process.stdout.write(m[1] + '\\n');
-        process.exit(0);
-      } catch(err) {
-        proc.kill();
-        process.stderr.write(err.message + '\\n');
-        process.exit(1);
+        signature = await signTs(ts);
+        process.stdout.write('[sign] OK\\n');
+      } catch(e) {
+        process.stdout.write('[sign] failed: ' + e.message + '\\n');
       }
-    }, 400);
-    setTimeout(() => { proc.kill(); process.stderr.write('Overall timeout\\n'); process.exit(1); }, 25000);
+
+      const body = JSON.stringify(payload);
+      const headers = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'SereneSpring/1.0',
+        'Content-Length': Buffer.byteLength(body),
+      };
+      if (signature) {
+        headers['X-BTC-Address']   = btcAddress;
+        headers['X-BTC-Signature'] = signature;
+        headers['X-BTC-Timestamp'] = ts;
+      }
+
+      const url = new URL('https://aibtc.news/api/signals');
+      return new Promise((resolve) => {
+        const req = https.request({
+          hostname: url.hostname,
+          path: url.pathname,
+          method: 'POST',
+          headers,
+        }, res => {
+          let data = '';
+          res.on('data', c => data += c);
+          res.on('end', () => {
+            process.stdout.write('[submit] ' + res.statusCode + ' ' + data.slice(0, 300) + '\\n');
+            resolve(res.statusCode);
+          });
+        });
+        req.on('error', e => { process.stdout.write('[submit] error: ' + e.message + '\\n'); resolve(0); });
+        req.write(body);
+        req.end();
+      });
+    })().then(code => process.exit(code >= 200 && code < 300 ? 0 : 1)).catch(e => {
+      process.stderr.write(e.message + '\\n'); process.exit(1);
+    });
 """)
 
 
-def sign_message(message: str) -> str:
-    """Sign a message using the AIBTC MCP server. Returns signature or empty string."""
+def submit_via_node(payload: dict, btc_address: str) -> bool:
+    """Sign and submit signal entirely via Node.js (mirrors heartbeat pattern)."""
     mnemonic = os.environ.get("WALLET_MNEMONIC", "")
     if not mnemonic:
-        print("  [sign] WALLET_MNEMONIC not set — skipping signature")
-        return ""
+        print("  [sign] WALLET_MNEMONIC not set — will attempt unsigned submission")
     try:
         result = subprocess.run(
-            ["node", "-e", _SIGN_JS],
-            capture_output=True, text=True, timeout=30,
-            env={**os.environ, "WALLET_MNEMONIC": mnemonic, "SIGN_MESSAGE": message},
+            ["node", "-e", _SUBMIT_JS],
+            capture_output=True, text=True, timeout=45,
+            env={
+                **os.environ,
+                "WALLET_MNEMONIC": mnemonic,
+                "BTC_ADDRESS": btc_address,
+                "SIGNAL_PAYLOAD": json.dumps(payload),
+            },
         )
-        if result.returncode == 0:
-            sig = result.stdout.strip()
-            print(f"  [sign] Signed OK")
-            return sig
-        else:
-            print(f"  [sign] Signing failed: {result.stderr.strip()[:200]}")
-            return ""
+        print(result.stdout.strip())
+        if result.stderr.strip():
+            print(f"  [node stderr] {result.stderr.strip()[:200]}")
+        return result.returncode == 0
     except Exception as e:
-        print(f"  [sign] Signing error: {e}")
-        return ""
+        print(f"  [submit] Node.js call failed: {e}")
+        return False
 
 SLOT_LABEL = {
     1:  "00:00 UTC",  2:  "01:00 UTC",  3:  "02:00 UTC",  4:  "03:00 UTC",
@@ -275,10 +315,6 @@ def submit_signal(headline: str, summary: str, source_url: str, beat: str,
                   btc_address: str, beat_slug: str = "") -> bool:
     if not headline or not source_url:
         return False
-
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-    signature = sign_message(ts)
-
     payload = {
         "btc_address": btc_address,
         "beat_slug": beat_slug or derive_beat_slug(beat),
@@ -288,24 +324,7 @@ def submit_signal(headline: str, summary: str, source_url: str, beat: str,
         "tags": derive_tags(beat),
         "disclosure": "groq llama-3.3-70b, primary API sources (mempool.space, api.hiro.so, github.com)",
     }
-
-    headers = {**HEADERS}
-    if signature:
-        headers["X-BTC-Address"] = btc_address
-        headers["X-BTC-Signature"] = signature
-        headers["X-BTC-Timestamp"] = ts
-
-    try:
-        resp = requests.post(f"{AIBTC_API}/signals", json=payload, headers=headers, timeout=15)
-        if resp.status_code in (200, 201):
-            print(f"  [submit] Signal accepted by aibtc.news")
-            return True
-        else:
-            print(f"  [submit] API returned {resp.status_code}: {resp.text[:200]}")
-            return False
-    except Exception as e:
-        print(f"  [submit] Request failed: {e}")
-        return False
+    return submit_via_node(payload, btc_address)
 
 
 def derive_tags(beat: str) -> list:
