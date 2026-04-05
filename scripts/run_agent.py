@@ -42,9 +42,9 @@ _SIGN_JS = textwrap.dedent("""\
 
     const mnemonic = process.env.WALLET_MNEMONIC;
     const password = process.env.WALLET_PASSWORD;
-    const message  = process.argv[2];
+    const message  = process.env.SIGN_MESSAGE;
 
-    if (!mnemonic || !message) { process.stderr.write('Missing WALLET_MNEMONIC or message\\n'); process.exit(1); }
+    if (!mnemonic || !message) { process.stderr.write('Missing WALLET_MNEMONIC or SIGN_MESSAGE\\n'); process.exit(1); }
 
     const proc = spawn('aibtc-mcp-server', [], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -103,9 +103,9 @@ def sign_message(message: str) -> str:
         return ""
     try:
         result = subprocess.run(
-            ["node", "-e", _SIGN_JS, message],
+            ["node", "-e", _SIGN_JS],
             capture_output=True, text=True, timeout=30,
-            env={**os.environ, "WALLET_MNEMONIC": mnemonic},
+            env={**os.environ, "WALLET_MNEMONIC": mnemonic, "SIGN_MESSAGE": message},
         )
         if result.returncode == 0:
             sig = result.stdout.strip()
@@ -318,17 +318,24 @@ def derive_tags(beat: str) -> list:
 
 
 def derive_beat_slug(beat: str) -> str:
+    # Explicit secret takes priority
+    env_slug = os.environ.get("AGENT_BEAT_SLUG", "").strip()
+    if env_slug:
+        return env_slug
     slug_map = {
         "Bitcoin Infrastructure": "infrastructure",
         "Bitcoin Macro": "bitcoin-macro",
         "Agent Trading": "agent-trading",
         "Agent Economy": "agent-economy",
     }
-    # Check env override first (set via AGENT_BEAT_SLUG secret if needed)
-    env_slug = os.environ.get("AGENT_BEAT_SLUG", "")
-    if env_slug:
-        return env_slug
-    return slug_map.get(beat, beat.lower().replace(" ", "-"))
+    slug = slug_map.get(beat)
+    if slug:
+        return slug
+    # Safe fallback: lowercase, spaces→hyphens, strip non-alphanumeric except hyphens, truncate
+    import re
+    slug = re.sub(r"[^a-z0-9-]", "", beat.lower().replace(" ", "-").replace(",", ""))
+    slug = re.sub(r"-+", "-", slug).strip("-")[:50]
+    return slug or "bitcoin-macro"
 
 
 def append_log(log_path: str, entry: str):

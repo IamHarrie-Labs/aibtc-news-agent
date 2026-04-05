@@ -130,4 +130,4 @@ jobs:
           git config user.email "agent@noreply"
           git add news-log.md
           git diff --cached --quiet || git commit -m "signal log: slot ${{ steps.slot.outputs.slot }} $(date -u +'%Y-%m-%d %H:%M UTC')"
-          git push
+          git pull --rebase && git push || (git pull --rebase && git push)
