@@ -51,6 +51,7 @@ jobs:
       AGENT_BEAT: ${{ secrets.AGENT_BEAT }}
       AGENT_BEAT_SLUG: ${{ secrets.AGENT_BEAT_SLUG }}
       AGENT_PRIMARY_SKILL: ${{ secrets.AGENT_PRIMARY_SKILL }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
     steps:
       - name: Checkout repo
@@ -65,7 +66,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install groq requests feedparser --quiet
+          pip install groq requests feedparser anthropic --quiet
           npm install -g @aibtc/mcp-server@latest --quiet
 
       - name: Detect slot from UTC hour
