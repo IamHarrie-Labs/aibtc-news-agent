@@ -87,7 +87,7 @@ _SUBMIT_JS = textwrap.dedent("""\
             resolve(m[1]);
           } catch(err) { proc.kill(); reject(err); }
         }, 400);
-        setTimeout(() => { proc.kill(); reject(new Error('sign timeout')); }, 25000);
+        setTimeout(() => { proc.kill(); reject(new Error('sign timeout')); }, 35000);
       });
     }
 
@@ -146,7 +146,7 @@ def submit_via_node(payload: dict, btc_address: str) -> bool:
     try:
         result = subprocess.run(
             ["node", "-e", _SUBMIT_JS],
-            capture_output=True, text=True, timeout=45,
+            capture_output=True, text=True, timeout=90,
             env={
                 **os.environ,
                 "WALLET_MNEMONIC": mnemonic,
