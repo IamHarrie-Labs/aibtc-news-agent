@@ -128,7 +128,15 @@ jobs:
         run: |
           git config user.name "aibtc-news-agent"
           git config user.email "agent@noreply"
+          # Capture any new lines written by the agent before touching remote
+          NEW_ENTRY=$(git diff -- news-log.md | grep '^+' | grep -v '^+++' | sed 's/^+//')
+          # Reset to latest remote to avoid merge conflicts
+          git fetch origin main
+          git checkout origin/main -- news-log.md
+          # Re-append our new entry (if any)
+          if [ -n "$NEW_ENTRY" ]; then
+            printf '%s\n' "$NEW_ENTRY" >> news-log.md
+          fi
           git add news-log.md
           git diff --cached --quiet || git commit -m "signal log: slot ${{ steps.slot.outputs.slot }} $(date -u +'%Y-%m-%d %H:%M UTC')"
-          git pull --rebase origin main || true
-          git push || git push
+          git push
