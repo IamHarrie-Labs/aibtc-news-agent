@@ -2,23 +2,35 @@ name: AIBTC News Agent
 
 on:
   schedule:
-    # 12 slots per UTC day — every 2 hours
-    - cron: "0 0 * * *"   # slot 1  — midnight sweep
-    - cron: "0 2 * * *"   # slot 2  — early research
-    - cron: "0 4 * * *"   # slot 3  — pre-market
-    - cron: "0 6 * * *"   # slot 4  — arxiv + papers
-    - cron: "0 8 * * *"   # slot 5  — beat sweep
-    - cron: "0 10 * * *"  # slot 6  — on-chain data
-    - cron: "0 12 * * *"  # slot 7  — midday beat
-    - cron: "0 14 * * *"  # slot 8  — market update
-    - cron: "0 16 * * *"  # slot 9  — US session scout
-    - cron: "0 18 * * *"  # slot 10 — beat sweep
-    - cron: "0 20 * * *"  # slot 11 — deal flow
-    - cron: "0 22 * * *"  # slot 12 — daily wrap
+    # 24 slots per UTC day — every hour
+    - cron: "0 0 * * *"   # slot 1  — 00:00 UTC
+    - cron: "0 1 * * *"   # slot 2  — 01:00 UTC
+    - cron: "0 2 * * *"   # slot 3  — 02:00 UTC
+    - cron: "0 3 * * *"   # slot 4  — 03:00 UTC
+    - cron: "0 4 * * *"   # slot 5  — 04:00 UTC
+    - cron: "0 5 * * *"   # slot 6  — 05:00 UTC
+    - cron: "0 6 * * *"   # slot 7  — 06:00 UTC
+    - cron: "0 7 * * *"   # slot 8  — 07:00 UTC
+    - cron: "0 8 * * *"   # slot 9  — 08:00 UTC
+    - cron: "0 9 * * *"   # slot 10 — 09:00 UTC
+    - cron: "0 10 * * *"  # slot 11 — 10:00 UTC
+    - cron: "0 11 * * *"  # slot 12 — 11:00 UTC
+    - cron: "0 12 * * *"  # slot 13 — 12:00 UTC
+    - cron: "0 13 * * *"  # slot 14 — 13:00 UTC
+    - cron: "0 14 * * *"  # slot 15 — 14:00 UTC
+    - cron: "0 15 * * *"  # slot 16 — 15:00 UTC
+    - cron: "0 16 * * *"  # slot 17 — 16:00 UTC
+    - cron: "0 17 * * *"  # slot 18 — 17:00 UTC
+    - cron: "0 18 * * *"  # slot 19 — 18:00 UTC
+    - cron: "0 19 * * *"  # slot 20 — 19:00 UTC
+    - cron: "0 20 * * *"  # slot 21 — 20:00 UTC
+    - cron: "0 21 * * *"  # slot 22 — 21:00 UTC
+    - cron: "0 22 * * *"  # slot 23 — 22:00 UTC
+    - cron: "0 23 * * *"  # slot 24 — 23:00 UTC
   workflow_dispatch:
     inputs:
       slot_override:
-        description: "Force a specific slot (1–12). Leave blank to auto-detect from UTC hour."
+        description: "Force a specific slot (1–24). Leave blank to auto-detect from UTC hour."
         required: false
         default: ""
 
@@ -59,20 +71,32 @@ jobs:
           if [ -n "${{ github.event.inputs.slot_override }}" ]; then
             echo "slot=${{ github.event.inputs.slot_override }}" >> $GITHUB_OUTPUT
           else
-            HOUR=$(date -u +%H | sed 's/^0//')
+            HOUR=$(date -u +%-H)
             case $HOUR in
               0)  echo "slot=1"  >> $GITHUB_OUTPUT ;;
-              2)  echo "slot=2"  >> $GITHUB_OUTPUT ;;
-              4)  echo "slot=3"  >> $GITHUB_OUTPUT ;;
-              6)  echo "slot=4"  >> $GITHUB_OUTPUT ;;
-              8)  echo "slot=5"  >> $GITHUB_OUTPUT ;;
-              10) echo "slot=6"  >> $GITHUB_OUTPUT ;;
-              12) echo "slot=7"  >> $GITHUB_OUTPUT ;;
-              14) echo "slot=8"  >> $GITHUB_OUTPUT ;;
-              16) echo "slot=9"  >> $GITHUB_OUTPUT ;;
-              18) echo "slot=10" >> $GITHUB_OUTPUT ;;
-              20) echo "slot=11" >> $GITHUB_OUTPUT ;;
-              22) echo "slot=12" >> $GITHUB_OUTPUT ;;
+              1)  echo "slot=2"  >> $GITHUB_OUTPUT ;;
+              2)  echo "slot=3"  >> $GITHUB_OUTPUT ;;
+              3)  echo "slot=4"  >> $GITHUB_OUTPUT ;;
+              4)  echo "slot=5"  >> $GITHUB_OUTPUT ;;
+              5)  echo "slot=6"  >> $GITHUB_OUTPUT ;;
+              6)  echo "slot=7"  >> $GITHUB_OUTPUT ;;
+              7)  echo "slot=8"  >> $GITHUB_OUTPUT ;;
+              8)  echo "slot=9"  >> $GITHUB_OUTPUT ;;
+              9)  echo "slot=10" >> $GITHUB_OUTPUT ;;
+              10) echo "slot=11" >> $GITHUB_OUTPUT ;;
+              11) echo "slot=12" >> $GITHUB_OUTPUT ;;
+              12) echo "slot=13" >> $GITHUB_OUTPUT ;;
+              13) echo "slot=14" >> $GITHUB_OUTPUT ;;
+              14) echo "slot=15" >> $GITHUB_OUTPUT ;;
+              15) echo "slot=16" >> $GITHUB_OUTPUT ;;
+              16) echo "slot=17" >> $GITHUB_OUTPUT ;;
+              17) echo "slot=18" >> $GITHUB_OUTPUT ;;
+              18) echo "slot=19" >> $GITHUB_OUTPUT ;;
+              19) echo "slot=20" >> $GITHUB_OUTPUT ;;
+              20) echo "slot=21" >> $GITHUB_OUTPUT ;;
+              21) echo "slot=22" >> $GITHUB_OUTPUT ;;
+              22) echo "slot=23" >> $GITHUB_OUTPUT ;;
+              23) echo "slot=24" >> $GITHUB_OUTPUT ;;
               *)  echo "slot=0"  >> $GITHUB_OUTPUT ;;
             esac
           fi
