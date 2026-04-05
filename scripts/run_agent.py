@@ -349,6 +349,9 @@ def derive_beat_slug(beat: str) -> str:
         "Bitcoin Macro": "bitcoin-macro",
         "Agent Trading": "agent-trading",
         "Agent Economy": "agent-economy",
+        # Legacy beat names → registered beat slug
+        "Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy": "bitcoin-macro",
+        "Bitcoin DeFi and Stacks": "bitcoin-macro",
     }
     slug = slug_map.get(beat)
     if slug:
@@ -358,6 +361,8 @@ def derive_beat_slug(beat: str) -> str:
     slug = re.sub(r"[^a-z0-9-]", "", beat.lower().replace(" ", "-").replace(",", ""))
     slug = re.sub(r"-+", "-", slug).strip("-")[:50]
     return slug or "bitcoin-macro"
+
+# Serene Spring is registered on bitcoin-macro beat. Set AGENT_BEAT_SLUG secret to override.
 
 
 def append_log(log_path: str, entry: str):
