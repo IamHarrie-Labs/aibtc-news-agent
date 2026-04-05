@@ -88,10 +88,13 @@ _SUBMIT_JS = textwrap.dedent("""\
     }
 
     (async () => {
-      const ts = new Date().toISOString();
+      // X-BTC-Timestamp must be Unix seconds (integer string), not ISO
+      const ts = String(Math.floor(Date.now() / 1000));
+      // Signed message format: "METHOD /path:timestamp"
+      const signMessage = 'POST /api/signals:' + ts;
       let signature = '';
       try {
-        signature = await signTs(ts);
+        signature = await signTs(signMessage);
         process.stdout.write('[sign] OK\\n');
       } catch(e) {
         process.stdout.write('[sign] failed: ' + e.message + '\\n');
