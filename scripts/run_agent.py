@@ -276,7 +276,7 @@ def submit_signal(headline: str, summary: str, source_url: str, beat: str,
     if not headline or not source_url:
         return False
 
-    ts = datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
     signature = sign_message(ts)
 
     payload = {
