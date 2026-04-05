@@ -26,7 +26,7 @@ except ImportError:
     sys.exit(1)
 
 
-AIBTC_API = "https://aibtc.com/api"
+AIBTC_API = "https://aibtc.news/api"
 HEADERS = {"Content-Type": "application/json", "User-Agent": "SereneSpring/1.0"}
 
 SLOT_LABEL = {
