@@ -46,8 +46,10 @@ jobs:
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       BTC_ADDRESS: ${{ secrets.BTC_ADDRESS }}
       STX_ADDRESS: ${{ secrets.STX_ADDRESS }}
+      WALLET_MNEMONIC: ${{ secrets.WALLET_MNEMONIC }}
       WALLET_PASSWORD: ${{ secrets.WALLET_PASSWORD }}
       AGENT_BEAT: ${{ secrets.AGENT_BEAT }}
+      AGENT_BEAT_SLUG: ${{ secrets.AGENT_BEAT_SLUG }}
       AGENT_PRIMARY_SKILL: ${{ secrets.AGENT_PRIMARY_SKILL }}
 
     steps:
@@ -64,6 +66,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install groq requests feedparser --quiet
+          npm install -g @aibtc/mcp-server@latest --quiet
 
       - name: Detect slot from UTC hour
         id: slot

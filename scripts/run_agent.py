@@ -10,7 +10,9 @@ Submits accepted signals to aibtc.news and logs the result.
 import argparse
 import json
 import os
+import subprocess
 import sys
+import textwrap
 from datetime import datetime, timezone
 
 try:
@@ -28,6 +30,93 @@ except ImportError:
 
 AIBTC_API = "https://aibtc.news/api"
 HEADERS = {"Content-Type": "application/json", "User-Agent": "SereneSpring/1.0"}
+
+
+# ---------------------------------------------------------------------------
+# BTC signing via AIBTC MCP server (same pattern as heartbeat.yml)
+# ---------------------------------------------------------------------------
+
+_SIGN_JS = textwrap.dedent("""\
+    const { spawn } = require('child_process');
+    const readline = require('readline');
+
+    const mnemonic = process.env.WALLET_MNEMONIC;
+    const password = process.env.WALLET_PASSWORD;
+    const message  = process.argv[2];
+
+    if (!mnemonic || !message) { process.stderr.write('Missing WALLET_MNEMONIC or message\\n'); process.exit(1); }
+
+    const proc = spawn('aibtc-mcp-server', [], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, NETWORK: 'mainnet', CLIENT_MNEMONIC: mnemonic }
+    });
+    proc.stderr.on('data', () => {});
+
+    let reqId = 1;
+    const pending = {};
+    function send(method, params) {
+      return new Promise((res, rej) => {
+        const id = reqId++;
+        pending[id] = { res, rej };
+        proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\\n');
+        setTimeout(() => { if (pending[id]) { delete pending[id]; rej(new Error('Timeout: ' + method)); } }, 10000);
+      });
+    }
+    const rl = readline.createInterface({ input: proc.stdout });
+    rl.on('line', (line) => {
+      if (!line.trim() || !line.startsWith('{')) return;
+      try {
+        const m = JSON.parse(line);
+        if (m.id && pending[m.id]) { pending[m.id].res(m.result || m); delete pending[m.id]; }
+      } catch(e) {}
+    });
+    proc.on('error', (e) => { process.stderr.write(e.message + '\\n'); process.exit(1); });
+
+    setTimeout(async () => {
+      try {
+        await send('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'serene-spring', version: '1' } });
+        await send('notifications/initialized', {});
+        await send('tools/call', { name: 'wallet_import', arguments: { name: 'serene-spring', mnemonic, password, network: 'mainnet' } });
+        await send('tools/call', { name: 'wallet_unlock', arguments: { password } });
+        const r = await send('tools/call', { name: 'btc_sign_message', arguments: { message } });
+        const text = r?.content?.[0]?.text || '';
+        const m = text.match(/"signature"\\s*:\\s*"([^"]+)"/) || text.match(/signature.*?\\\\"([^\\\\"]+)\\\\"/);
+        if (!m) throw new Error('No signature in: ' + text.slice(0, 100));
+        proc.kill();
+        process.stdout.write(m[1] + '\\n');
+        process.exit(0);
+      } catch(err) {
+        proc.kill();
+        process.stderr.write(err.message + '\\n');
+        process.exit(1);
+      }
+    }, 400);
+    setTimeout(() => { proc.kill(); process.stderr.write('Overall timeout\\n'); process.exit(1); }, 25000);
+""")
+
+
+def sign_message(message: str) -> str:
+    """Sign a message using the AIBTC MCP server. Returns signature or empty string."""
+    mnemonic = os.environ.get("WALLET_MNEMONIC", "")
+    if not mnemonic:
+        print("  [sign] WALLET_MNEMONIC not set — skipping signature")
+        return ""
+    try:
+        result = subprocess.run(
+            ["node", "-e", _SIGN_JS, message],
+            capture_output=True, text=True, timeout=30,
+            env={**os.environ, "WALLET_MNEMONIC": mnemonic},
+        )
+        if result.returncode == 0:
+            sig = result.stdout.strip()
+            print(f"  [sign] Signed OK")
+            return sig
+        else:
+            print(f"  [sign] Signing failed: {result.stderr.strip()[:200]}")
+            return ""
+    except Exception as e:
+        print(f"  [sign] Signing error: {e}")
+        return ""
 
 SLOT_LABEL = {
     1:  "00:00 UTC",  2:  "01:00 UTC",  3:  "02:00 UTC",  4:  "03:00 UTC",
@@ -183,20 +272,31 @@ def parse_signal(output: str) -> dict:
 
 
 def submit_signal(headline: str, summary: str, source_url: str, beat: str,
-                  btc_address: str) -> bool:
+                  btc_address: str, beat_slug: str = "") -> bool:
     if not headline or not source_url:
         return False
+
+    ts = datetime.now(timezone.utc).isoformat()
+    signature = sign_message(ts)
+
     payload = {
-        "btcAddress": btc_address,
+        "btc_address": btc_address,
+        "beat_slug": beat_slug or derive_beat_slug(beat),
         "headline": headline,
-        "summary": summary,
-        "sourceUrl": source_url,
-        "beat": beat,
+        "content": summary,
+        "sources": [{"url": source_url, "title": headline[:100]}],
         "tags": derive_tags(beat),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "disclosure": "groq llama-3.3-70b, primary API sources (mempool.space, api.hiro.so, github.com)",
     }
+
+    headers = {**HEADERS}
+    if signature:
+        headers["X-BTC-Address"] = btc_address
+        headers["X-BTC-Signature"] = signature
+        headers["X-BTC-Timestamp"] = ts
+
     try:
-        resp = requests.post(f"{AIBTC_API}/signals", json=payload, headers=HEADERS, timeout=15)
+        resp = requests.post(f"{AIBTC_API}/signals", json=payload, headers=headers, timeout=15)
         if resp.status_code in (200, 201):
             print(f"  [submit] Signal accepted by aibtc.news")
             return True
@@ -215,6 +315,20 @@ def derive_tags(beat: str) -> list:
         "Agent Trading": ["ai-agent", "mcp", "x402", "autonomous", "agent-economy"],
     }
     return tag_map.get(beat, ["bitcoin", "aibtc"])
+
+
+def derive_beat_slug(beat: str) -> str:
+    slug_map = {
+        "Bitcoin Infrastructure": "infrastructure",
+        "Bitcoin Macro": "bitcoin-macro",
+        "Agent Trading": "agent-trading",
+        "Agent Economy": "agent-economy",
+    }
+    # Check env override first (set via AGENT_BEAT_SLUG secret if needed)
+    env_slug = os.environ.get("AGENT_BEAT_SLUG", "")
+    if env_slug:
+        return env_slug
+    return slug_map.get(beat, beat.lower().replace(" ", "-"))
 
 
 def append_log(log_path: str, entry: str):
@@ -296,6 +410,7 @@ def main():
             source_url=signal["source"],
             beat=args.beat,
             btc_address=args.btc_address,
+            beat_slug=derive_beat_slug(args.beat),
         )
         status = "submitted" if submitted else "submit-failed"
     else:
