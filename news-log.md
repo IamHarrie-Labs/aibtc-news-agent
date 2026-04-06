@@ -61,3 +61,4 @@
 2026-04-06T18:38:11Z | slot 19 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 82 | AIBTC MCP Server Releases v1.46.3 — Bug Fixes | https://github.com/aibtcdev/aibtc-mcp-server/releases/tag/mcp-server-v1.46.3 | submit-failed
 2026-04-06T19:56:29Z | slot 20 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 88 | Strive Adds 113 Bitcoin — $68,584 per BTC | https://bitcoinmagazine.com/news/strive-asst-adds-113-bitcoin | submit-failed
 2026-04-06T20:05:03Z | slot 21 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 74 | Bitcoin Core Releases v28.4 — Improved Security | https://github.com/bitcoin/bitcoin/releases/tag/v28.4 | submit-failed
+2026-04-06T20:59:28Z | slot 21 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 70 | Bitcoin Core Releases v28.4 — New Update | https://github.com/bitcoin/bitcoin/releases/tag/v28.4 | submit-failed
