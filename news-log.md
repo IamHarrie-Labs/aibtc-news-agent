@@ -43,3 +43,4 @@
 2026-04-05T23:04:44Z | slot 24 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | no signal | — | skipped
 2026-04-06T00:02:12Z | slot 1 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | no signal | — | skipped
 2026-04-06T06:19:15Z | slot 7 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | no signal | — | skipped
+2026-04-06T07:09:38Z | slot 8 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 73 | AIBTC MCP Server Releases mcp-server-v1.46.3 — v1.46.3 | https://github.com/aibtcdev/aibtc-mcp-server/releases/tag/mcp-server-v1.46.3 | submit-failed
