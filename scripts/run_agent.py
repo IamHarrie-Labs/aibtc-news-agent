@@ -551,12 +551,16 @@ def check_todays_count(log_path: str) -> int:
 
 
 def get_recent_urls(log_path: str, hours: int = 48) -> set:
-    """Return all source URLs filed in the last N hours — used for deduplication."""
+    """Return source URLs SUCCESSFULLY submitted in the last N hours — used for deduplication.
+    Only tracks lines ending in 'submitted' — submit-failed stories can be retried next day."""
     cutoff = datetime.now(timezone.utc).timestamp() - hours * 3600
     urls = set()
     try:
         with open(log_path) as f:
             for line in f:
+                # Only deduplicate against stories that actually reached the platform
+                if not line.rstrip().endswith("submitted"):
+                    continue
                 parts = [p.strip() for p in line.split("|")]
                 if len(parts) < 5:
                     continue
@@ -568,7 +572,6 @@ def get_recent_urls(log_path: str, hours: int = 48) -> set:
                         continue
                 except Exception:
                     continue
-                # URL is the 5th field (index 4) in the new log format
                 for part in parts:
                     if part.startswith("http"):
                         urls.add(part.rstrip(" |"))
