@@ -87,3 +87,4 @@
 2026-04-07T20:05:32Z | slot 21 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | duplicate | https://decrypt.co/363531/captive-audience-drive-demand-morgan-stanley-bitcoin-e | skipped
 2026-04-07T21:31:32Z | slot 22 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 92 | FDIC Proposes Stablecoin Rules — $1B Implication | https://decrypt.co/363570/fdic-proposed-rules-stablecoin-issuers-genius-act | submit-failed
 2026-04-07T22:01:53Z | slot 23 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 92 | FDIC Proposes Stablecoin Rules — $1B Implication | https://decrypt.co/363570/fdic-proposed-rules-stablecoin-issuers-genius-act | submit-failed
+2026-04-07T23:06:15Z | slot 24 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 92 | FDIC Advances Stablecoin Oversight — New Prudential Rule | https://bitcoinmagazine.com/news/fdic-advances-stablecoin-oversight | submit-failed
