@@ -81,3 +81,4 @@
 2026-04-07T16:18:08Z | slot 17 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 92 | Morgan Stanley Launches Bitcoin ETF — 16,000 Advisors | https://bitcoinmagazine.com/news/morgan-stanleys-bitcoin-mbst-to-go-live | submitted
 2026-04-07T16:36:41Z | slot 17 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | duplicate | https://bitcoinmagazine.com/news/morgan-stanleys-bitcoin-mbst-to-go-live | skipped
 2026-04-07T17:35:37Z | slot 18 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | duplicate | https://bitcoinmagazine.com/news/morgan-stanleys-bitcoin-mbst-to-go-live | skipped
+2026-04-07T18:09:41Z | slot 19 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | duplicate | https://bitcoinmagazine.com/news/morgan-stanleys-bitcoin-mbst-to-go-live | skipped
