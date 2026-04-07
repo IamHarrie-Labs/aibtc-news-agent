@@ -80,3 +80,4 @@
 2026-04-07T14:58:42Z | slot 15 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 84 | XRP ETFs Outpace Bitcoin — $224M Inflows | https://www.theblock.co/post/396519/xrp-leads-224-million-weekly-inflows-into-global-crypto-funds-as-bitcoin-sentiment-remains-mixed-and-ether-lags-coinshares | submitted
 2026-04-07T16:18:08Z | slot 17 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 92 | Morgan Stanley Launches Bitcoin ETF — 16,000 Advisors | https://bitcoinmagazine.com/news/morgan-stanleys-bitcoin-mbst-to-go-live | submitted
 2026-04-07T16:36:41Z | slot 17 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | duplicate | https://bitcoinmagazine.com/news/morgan-stanleys-bitcoin-mbst-to-go-live | skipped
+2026-04-07T17:35:37Z | slot 18 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | duplicate | https://bitcoinmagazine.com/news/morgan-stanleys-bitcoin-mbst-to-go-live | skipped
