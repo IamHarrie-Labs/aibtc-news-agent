@@ -518,6 +518,45 @@ def check_todays_count(log_path: str) -> int:
         return 0
 
 
+def get_recent_urls(log_path: str, hours: int = 48) -> set:
+    """Return all source URLs filed in the last N hours — used for deduplication."""
+    cutoff = datetime.now(timezone.utc).timestamp() - hours * 3600
+    urls = set()
+    try:
+        with open(log_path) as f:
+            for line in f:
+                parts = [p.strip() for p in line.split("|")]
+                if len(parts) < 5:
+                    continue
+                try:
+                    ts_str = parts[0].replace("Z", "+00:00")
+                    from datetime import datetime as dt
+                    ts = dt.fromisoformat(ts_str).timestamp()
+                    if ts < cutoff:
+                        continue
+                except Exception:
+                    continue
+                # URL is the 5th field (index 4) in the new log format
+                for part in parts:
+                    if part.startswith("http"):
+                        urls.add(part.rstrip(" |"))
+    except FileNotFoundError:
+        pass
+    return urls
+
+
+def is_duplicate(source_url: str, headline: str, recent_urls: set) -> bool:
+    """Return True if this story has already been filed recently."""
+    if source_url in recent_urls:
+        return True
+    # Normalize URL — same article can appear with/without trailing slash or query params
+    base_url = source_url.split("?")[0].rstrip("/")
+    for u in recent_urls:
+        if u.split("?")[0].rstrip("/") == base_url:
+            return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -578,10 +617,17 @@ def main():
     print(f"Self-reported score: {score}/100")
     print(f"Source URL: {parsed['source_url']}")
 
-    # Hard gate: don't submit if self-score < 65 (model is being honest about quality)
-    if score > 0 and score < 65:
-        print(f"[gate] Self-score {score} < 65. Signal quality too low. Skipping.")
+    # Hard gate: don't submit if self-score < 75 (model is being honest about quality)
+    if score > 0 and score < 75:
+        print(f"[gate] Self-score {score} < 75. Signal quality too low. Skipping.")
         append_log(args.log, f"{ts} | slot {args.slot} | {args.beat} | {parsed['headline'][:80]} | score {score} | skipped-low-score")
+        sys.exit(0)
+
+    # Deduplication gate: skip if this URL was already filed in the last 48h
+    recent_urls = get_recent_urls(args.log)
+    if parsed["source_url"] and is_duplicate(parsed["source_url"], parsed["headline"], recent_urls):
+        print(f"[gate] Duplicate story — already filed this URL recently. Skipping.")
+        append_log(args.log, f"{ts} | slot {args.slot} | {args.beat} | duplicate | {parsed['source_url'][:80]} | skipped")
         sys.exit(0)
 
     if parsed["headline"] and parsed["source_url"]:
