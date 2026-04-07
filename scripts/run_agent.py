@@ -479,13 +479,45 @@ def submit_signal(parsed: dict, beat: str, btc_address: str, model_name: str) ->
         print("  [warn] Missing headline or source URL — not submitting.")
         return False
 
-    # Reject raw API URLs for btc_macro
-    if beat.lower() in ("bitcoin macro", "btc-macro", "bitcoin-macro"):
-        raw_api_patterns = ["mempool.space/api", "api.hiro.so/extended", "api.hiro.so/v"]
-        if any(p in source_url for p in raw_api_patterns):
-            print(f"  [gate] Raw API URL rejected for btc-macro: {source_url}")
-            print("  Signal would score low on Beat Relevance. Skipping.")
-            return False
+    # Hard content filter for bitcoin-macro beat — block all infrastructure URLs and headlines.
+    # These patterns indicate on-chain data, GitHub changelogs, or ecosystem dashboards
+    # that belong to the infrastructure beat and will be rejected by the platform.
+    if beat.lower() in ("bitcoin macro", "btc-macro", "bitcoin-macro",
+                        "bitcoin defi and stacks", "bitcoin defi & stacks",
+                        "bitcoin defi and stacks, ordinals and runes, ai agent economy"):
+        infra_url_patterns = [
+            "github.com/bitcoin/bitcoin",
+            "github.com/aibtcdev/",
+            "github.com/BitflowFinance/",
+            "github.com/bitflowfinance/",
+            "mempool.space/api",
+            "mempool.space/block/",
+            "api.hiro.so/",
+            "explorer.hiro.so/",
+            "aibtc.news/api/",
+            "aibtc.com/api/",
+        ]
+        infra_headline_patterns = [
+            r"releases? v\d",
+            r"release.*v\d+\.\d+",
+            r"v\d+\.\d+\.\d+.*release",
+            r"block #?\d{5,}",
+            r"mempool fee",
+            r"\bsat/vb\b",
+            r"\d+ transactions.*kb",
+            r"mcp server release",
+            r"bitcoin core release",
+            r"x402.*relay.*release",
+            r"bitflow.*pr #",
+        ]
+        for pattern in infra_url_patterns:
+            if pattern.lower() in source_url.lower():
+                print(f"  [gate] Infrastructure URL blocked for btc-macro: {source_url}")
+                return False
+        for pattern in infra_headline_patterns:
+            if re.search(pattern, headline.lower()):
+                print(f"  [gate] Infrastructure headline blocked for btc-macro: {headline}")
+                return False
 
     payload = {
         "btc_address": btc_address,

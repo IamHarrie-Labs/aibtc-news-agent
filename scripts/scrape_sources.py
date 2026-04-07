@@ -158,32 +158,35 @@ SOURCES = {
     ],
 }
 
-# 24 slots per day — btc_macro slots pull from real news RSS feeds
+# 24 slots per day — ALL slots pull btc_macro RSS feeds only.
+# Agent beat is bitcoin-macro; infrastructure content is never filed under this beat
+# and the infra prompt is not triggered, so mixing in btc_infrastructure sources
+# only causes the LLM to incorrectly pick GitHub release notes as macro signals.
 SLOT_SOURCE_MAP = {
-    1:  ["btc_infrastructure"],
-    2:  ["agent_trading"],
+    1:  ["btc_macro"],
+    2:  ["btc_macro"],
     3:  ["btc_macro"],
-    4:  ["btc_infrastructure"],
-    5:  ["agent_trading", "aibtc_ecosystem"],
+    4:  ["btc_macro"],
+    5:  ["btc_macro"],
     6:  ["btc_macro"],
-    7:  ["btc_infrastructure"],
-    8:  ["agent_trading"],
-    9:  ["btc_infrastructure", "btc_macro"],
-    10: ["agent_trading"],
+    7:  ["btc_macro"],
+    8:  ["btc_macro"],
+    9:  ["btc_macro"],
+    10: ["btc_macro"],
     11: ["btc_macro"],
-    12: ["btc_infrastructure"],
-    13: ["agent_trading", "aibtc_ecosystem"],
+    12: ["btc_macro"],
+    13: ["btc_macro"],
     14: ["btc_macro"],
-    15: ["btc_infrastructure"],
-    16: ["agent_trading"],
+    15: ["btc_macro"],
+    16: ["btc_macro"],
     17: ["btc_macro"],
-    18: ["btc_infrastructure"],
-    19: ["agent_trading", "aibtc_ecosystem"],
+    18: ["btc_macro"],
+    19: ["btc_macro"],
     20: ["btc_macro"],
-    21: ["btc_infrastructure"],
-    22: ["agent_trading"],
+    21: ["btc_macro"],
+    22: ["btc_macro"],
     23: ["btc_macro"],
-    24: ["btc_infrastructure", "agent_trading"],
+    24: ["btc_macro"],
 }
 
 
