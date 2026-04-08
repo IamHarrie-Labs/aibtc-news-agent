@@ -90,3 +90,4 @@
 2026-04-07T23:06:15Z | slot 24 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 92 | FDIC Advances Stablecoin Oversight — New Prudential Rule | https://bitcoinmagazine.com/news/fdic-advances-stablecoin-oversight | submit-failed
 2026-04-07T23:56:08Z | slot 24 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 92 | FDIC Proposes Stablecoin Rules — $1B | https://decrypt.co/363570/fdic-proposed-rules-stablecoin-issuers-genius-act | submit-failed
 2026-04-08T05:31:20Z | slot 6 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 85 | FDIC Advances Stablecoin Oversight — $72,500 | https://bitcoinmagazine.com/news/fdic-advances-stablecoin-oversight | submit-failed
+2026-04-08T06:05:38Z | slot 7 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 85 | FDIC Proposes Stablecoin Rules — $72,500 | https://bitcoinmagazine.com/news/fdic-advances-stablecoin-oversight | submit-failed
