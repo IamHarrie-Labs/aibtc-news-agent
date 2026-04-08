@@ -99,3 +99,4 @@
 2026-04-08T09:53:00Z | slot 10 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 92 | Bitcoin Spikes $72K — Trump Announces Ceasefire | https://decrypt.co/363611/bitcoin-spikes-over-72k-as-trump-announces-conditional-ceasefire-with-iran | submitted
 2026-04-08T10:40:55Z | slot 11 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | duplicate | https://decrypt.co/363611/bitcoin-spikes-over-72k-as-trump-announces-conditional | skipped
 2026-04-08T11:17:33Z | slot 12 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | duplicate | https://decrypt.co/363611/bitcoin-spikes-over-72k-as-trump-announces-conditional | skipped
+2026-04-08T12:01:36Z | slot 13 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | duplicate | https://www.theblock.co/post/396620/sec-admits-flaws-past-crypto-enforcement | skipped
