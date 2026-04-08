@@ -2,35 +2,15 @@ name: AIBTC News Agent
 
 on:
   schedule:
-    # 24 slots per UTC day — every hour
+    # 4 slots at start of UTC day — claim the beat cap BEFORE other correspondents
     - cron: "0 0 * * *"   # slot 1  — 00:00 UTC
     - cron: "0 1 * * *"   # slot 2  — 01:00 UTC
     - cron: "0 2 * * *"   # slot 3  — 02:00 UTC
     - cron: "0 3 * * *"   # slot 4  — 03:00 UTC
-    - cron: "0 4 * * *"   # slot 5  — 04:00 UTC
-    - cron: "0 5 * * *"   # slot 6  — 05:00 UTC
-    - cron: "0 6 * * *"   # slot 7  — 06:00 UTC
-    - cron: "0 7 * * *"   # slot 8  — 07:00 UTC
-    - cron: "0 8 * * *"   # slot 9  — 08:00 UTC
-    - cron: "0 9 * * *"   # slot 10 — 09:00 UTC
-    - cron: "0 10 * * *"  # slot 11 — 10:00 UTC
-    - cron: "0 11 * * *"  # slot 12 — 11:00 UTC
-    - cron: "0 12 * * *"  # slot 13 — 12:00 UTC
-    - cron: "0 13 * * *"  # slot 14 — 13:00 UTC
-    - cron: "0 14 * * *"  # slot 15 — 14:00 UTC
-    - cron: "0 15 * * *"  # slot 16 — 15:00 UTC
-    - cron: "0 16 * * *"  # slot 17 — 16:00 UTC
-    - cron: "0 17 * * *"  # slot 18 — 17:00 UTC
-    - cron: "0 18 * * *"  # slot 19 — 18:00 UTC
-    - cron: "0 19 * * *"  # slot 20 — 19:00 UTC
-    - cron: "0 20 * * *"  # slot 21 — 20:00 UTC
-    - cron: "0 21 * * *"  # slot 22 — 21:00 UTC
-    - cron: "0 22 * * *"  # slot 23 — 22:00 UTC
-    - cron: "0 23 * * *"  # slot 24 — 23:00 UTC
   workflow_dispatch:
     inputs:
       slot_override:
-        description: "Force a specific slot (1–24). Leave blank to auto-detect from UTC hour."
+        description: "Force a specific slot (1-4). Leave blank to auto-detect from UTC hour."
         required: false
         default: ""
 
@@ -66,7 +46,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install groq requests feedparser anthropic --quiet
+          pip install groq requests feedparser --quiet
           npm install -g @aibtc/mcp-server@latest --quiet
 
       - name: Detect slot from UTC hour
@@ -77,31 +57,11 @@ jobs:
           else
             HOUR=$(date -u +%-H)
             case $HOUR in
-              0)  echo "slot=1"  >> $GITHUB_OUTPUT ;;
-              1)  echo "slot=2"  >> $GITHUB_OUTPUT ;;
-              2)  echo "slot=3"  >> $GITHUB_OUTPUT ;;
-              3)  echo "slot=4"  >> $GITHUB_OUTPUT ;;
-              4)  echo "slot=5"  >> $GITHUB_OUTPUT ;;
-              5)  echo "slot=6"  >> $GITHUB_OUTPUT ;;
-              6)  echo "slot=7"  >> $GITHUB_OUTPUT ;;
-              7)  echo "slot=8"  >> $GITHUB_OUTPUT ;;
-              8)  echo "slot=9"  >> $GITHUB_OUTPUT ;;
-              9)  echo "slot=10" >> $GITHUB_OUTPUT ;;
-              10) echo "slot=11" >> $GITHUB_OUTPUT ;;
-              11) echo "slot=12" >> $GITHUB_OUTPUT ;;
-              12) echo "slot=13" >> $GITHUB_OUTPUT ;;
-              13) echo "slot=14" >> $GITHUB_OUTPUT ;;
-              14) echo "slot=15" >> $GITHUB_OUTPUT ;;
-              15) echo "slot=16" >> $GITHUB_OUTPUT ;;
-              16) echo "slot=17" >> $GITHUB_OUTPUT ;;
-              17) echo "slot=18" >> $GITHUB_OUTPUT ;;
-              18) echo "slot=19" >> $GITHUB_OUTPUT ;;
-              19) echo "slot=20" >> $GITHUB_OUTPUT ;;
-              20) echo "slot=21" >> $GITHUB_OUTPUT ;;
-              21) echo "slot=22" >> $GITHUB_OUTPUT ;;
-              22) echo "slot=23" >> $GITHUB_OUTPUT ;;
-              23) echo "slot=24" >> $GITHUB_OUTPUT ;;
-              *)  echo "slot=0"  >> $GITHUB_OUTPUT ;;
+              0) echo "slot=1" >> $GITHUB_OUTPUT ;;
+              1) echo "slot=2" >> $GITHUB_OUTPUT ;;
+              2) echo "slot=3" >> $GITHUB_OUTPUT ;;
+              3) echo "slot=4" >> $GITHUB_OUTPUT ;;
+              *) echo "slot=0" >> $GITHUB_OUTPUT ;;
             esac
           fi
 
@@ -113,7 +73,7 @@ jobs:
             --beat "$AGENT_BEAT" \
             --output raw_sources.json
 
-      - name: Run agent — research, fact-check, write, submit
+      - name: Run agent -- research, fact-check, write, submit
         if: steps.slot.outputs.slot != '0'
         run: |
           python scripts/run_agent.py \
@@ -129,12 +89,9 @@ jobs:
         run: |
           git config user.name "aibtc-news-agent"
           git config user.email "agent@noreply"
-          # Capture any new lines written by the agent before touching remote
           NEW_ENTRY=$(git diff -- news-log.md | grep '^+' | grep -v '^+++' | sed 's/^+//')
-          # Reset to latest remote to avoid merge conflicts
           git fetch origin main
           git checkout origin/main -- news-log.md
-          # Re-append our new entry (if any)
           if [ -n "$NEW_ENTRY" ]; then
             printf '%s\n' "$NEW_ENTRY" >> news-log.md
           fi
