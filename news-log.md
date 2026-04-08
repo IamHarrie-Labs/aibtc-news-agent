@@ -101,3 +101,4 @@
 2026-04-08T11:17:33Z | slot 12 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | duplicate | https://decrypt.co/363611/bitcoin-spikes-over-72k-as-trump-announces-conditional | skipped
 2026-04-08T12:01:36Z | slot 13 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | duplicate | https://www.theblock.co/post/396620/sec-admits-flaws-past-crypto-enforcement | skipped
 2026-04-08T12:08:07Z | slot 13 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | duplicate | https://decrypt.co/363611/bitcoin-spikes-over-72k-as-trump-announces-conditional | skipped
+2026-04-08T15:00:10Z | slot 16 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 92 | Morgan Stanley Launches Spot Bitcoin ETF — 16,000 Advisors | https://bitcoinmagazine.com/news/morgan-stanley-us-bank-spot-bitcoin-etf | submitted
