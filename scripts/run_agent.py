@@ -555,6 +555,39 @@ def is_duplicate(source_url: str, recent_urls: set) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Pre-filed signal loader (bypasses LLM when prefiled_signals.json exists)
+# ---------------------------------------------------------------------------
+
+def load_prefiled_signal(slot: int) -> dict | None:
+    """
+    Check for prefiled_signals.json in the repo root.
+    Returns the signal dict for the given slot if:
+      - the file exists
+      - the 'date' field matches today UTC
+      - a signal for this slot is present
+    Returns None otherwise (fall through to LLM).
+    """
+    prefiled_path = "prefiled_signals.json"
+    if not os.path.exists(prefiled_path):
+        return None
+    try:
+        with open(prefiled_path) as f:
+            data = json.load(f)
+        target_date = data.get("date", "")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        if target_date != today:
+            print(f"  [prefiled] date mismatch ({target_date} vs {today}) — using LLM.")
+            return None
+        for sig in data.get("signals", []):
+            if sig.get("slot") == slot:
+                print(f"  [prefiled] Found pre-written signal for slot {slot}.")
+                return sig
+    except Exception as e:
+        print(f"  [prefiled] Could not load prefiled_signals.json: {e}")
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -573,6 +606,49 @@ def main():
         print(f"[abort] Already filed {count} signals today (limit {MAX_SIGNALS_PER_DAY}). Exiting.")
         sys.exit(0)
 
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # --- PRE-FILED SIGNAL PATH (no LLM needed) ---
+    prefiled = load_prefiled_signal(args.slot)
+    if prefiled:
+        headline = prefiled.get("headline", "")
+        body     = prefiled.get("body", "")
+        url1     = prefiled.get("source_url_1", "")
+        url2     = prefiled.get("source_url_2", "")
+        sources  = prefiled.get("sources_used", "")
+        score    = prefiled.get("self_score", 0)
+        tags     = prefiled.get("tags", derive_tags(args.beat))
+        print(f"\n[prefiled] Headline : {headline}")
+        print(f"[prefiled] Score    : {score}/100")
+        print(f"[prefiled] Source 1 : {url1}")
+        print(f"[prefiled] Source 2 : {url2}")
+
+        recent_urls = get_recent_urls(args.log)
+        if url1 and is_duplicate(url1, recent_urls):
+            print("[prefiled] Duplicate detected — skipping.")
+            append_log(args.log, f"{ts} | slot {args.slot} | {args.beat} | duplicate | {url1[:80]} | skipped")
+            sys.exit(0)
+
+        sources_list = [{"url": url1, "title": headline[:100]}]
+        if url2 and url2 != url1:
+            sources_list.append({"url": url2, "title": f"{headline[:80]} (2)"})
+
+        payload = {
+            "btc_address": args.btc_address,
+            "beat_slug": derive_beat_slug(args.beat),
+            "headline": headline[:120],
+            "content": body[:1000],
+            "sources": sources_list,
+            "tags": tags,
+            "disclosure": f"pre-researched by Serene Spring, sources: {sources[:150]}",
+        }
+        submitted = submit_via_node(payload, args.btc_address)
+        status = "submitted" if submitted else "submit-failed"
+        append_log(args.log,
+            f"{ts} | slot {args.slot} | {args.beat} | score {score} | {headline[:80]} | {url1} | {status}")
+        sys.exit(0)
+
+    # --- LLM PATH (fallback when no pre-filed signal) ---
     with open(args.sources) as f:
         data = json.load(f)
 
