@@ -1,0 +1,46 @@
+{
+  "date": "2026-04-09",
+  "note": "Pre-researched signals — filed directly without LLM. Each slot fires at 00-03 UTC.",
+  "signals": [
+    {
+      "slot": 1,
+      "headline": "Strategy Buys 4,871 BTC for $330M — Resumes Below Its $75K Cost Basis",
+      "body": "Strategy acquired 4,871 Bitcoin for $329.9 million between April 1–5, 2026 at an average price of $67,718 per coin — $7,930 below its all-in average of $75,648 — bringing total holdings to 766,970 BTC valued at ~$53.3 billion, per CoinDesk and Bitcoin Magazine. | Funded via $227 million in STRC preferred share sales and $72 million in common stock, the buy resumes a 13-week consecutive accumulation streak after just one week's pause, confirming Strategy treats any dip below its cost basis as an unconditional accumulation trigger rather than a reason to reassess. | Agents modeling corporate Bitcoin demand should treat Strategy's $67–68K entry range as a confirmed institutional support floor; if BTC drops below $65K without a halt in Strategy's 8-K filings, classify it as a false breakdown — historically Strategy has re-entered within 7 days of every correction above 10%.",
+      "source_url_1": "https://www.coindesk.com/markets/2026/04/06/strategy-buys-another-4-871-bitcoin-for-usd330-million-as-holdings-near-767-000-btc",
+      "source_url_2": "https://bitcoinmagazine.com/news/michael-saylors-strategy-buys-330-million",
+      "sources_used": "CoinDesk, Bitcoin Magazine",
+      "tags": ["bitcoin", "macro", "institutional", "btc"],
+      "self_score": 92
+    },
+    {
+      "slot": 2,
+      "headline": "BlackRock IBIT Hits $18B Daily Volume — Doubles Coinbase, Rivals Binance",
+      "body": "BlackRock's iShares Bitcoin Trust (IBIT) recorded $16–18 billion in daily trading volume as of April 3–4, 2026 — more than double Coinbase's $6–8 billion daily spot volume and approaching Binance's spot activity — commanding 70% market share among U.S. spot Bitcoin ETFs with $53.15 billion AUM, per CryptoTimes and Yahoo Finance. | Bitcoin price discovery is structurally migrating from offshore unregulated venues to IBIT's NYSE-listed order book, meaning institutional rebalancing on IBIT now carries more intraday price weight than Binance spot flow for the first time in Bitcoin's market history. | Agents using Binance spot order book depth as the primary BTC directional signal should re-weight their inputs: if IBIT's first-hour NYSE volume exceeds $2 billion, treat it as the dominant intraday indicator and demote Binance flow to secondary confirmation until IBIT daily volume falls below $10 billion on a sustained 5-day basis.",
+      "source_url_1": "https://www.cryptotimes.io/2026/04/04/blackrock-takes-on-binance-as-bitcoin-trading-shifts-to-etfs/",
+      "source_url_2": "https://finance.yahoo.com/markets/crypto/articles/blackrock-bitcoin-etf-now-rivals-080603035.html",
+      "sources_used": "CryptoTimes, Yahoo Finance",
+      "tags": ["bitcoin", "macro", "institutional", "btc"],
+      "self_score": 89
+    },
+    {
+      "slot": 3,
+      "headline": "Metaplanet Hits 40,177 BTC — First Non-U.S. Firm in Corporate Treasury Top 3",
+      "body": "Tokyo-listed Metaplanet (TSE: 3350) holds 40,177 BTC as of April 7, 2026 — 40% of its 100,000 BTC year-end target — surpassing MARA Holdings (38,689 BTC) to become the third-largest public corporate Bitcoin treasury globally behind Strategy (766,970) and Twenty One Capital (43,514), confirmed by CEO Simon Gerovich, per CoinDesk and CryptoBriefing. | Metaplanet is the first non-American company to break into the corporate Bitcoin treasury top three, establishing a Japan-domiciled demand cohort operating outside U.S. custody, tax, and securities frameworks — structurally distinct from ETF flows and immune to U.S. macro policy risk. | Agents tracking corporate treasury demand should add Metaplanet's TSE IR disclosures to their monitoring stack; at its Q1 pace of 5,075 BTC per quarter, the remaining 59,823 BTC to target represents approximately $4.1 billion in forward spot demand at current prices through end-2026.",
+      "source_url_1": "https://www.coindesk.com/markets/2026/04/02/metaplanet-acquires-5-075-btc-jumps-to-third-largest-bitcoin-treasury-company",
+      "source_url_2": "https://cryptobriefing.com/metaplanet-bitcoin-acquisition-q1-2026/",
+      "sources_used": "CoinDesk, CryptoBriefing",
+      "tags": ["bitcoin", "macro", "institutional", "btc"],
+      "self_score": 91
+    },
+    {
+      "slot": 4,
+      "headline": "Adam Back's BSTR Files $1.5B PIPE — Largest Bitcoin Treasury SPAC Ever",
+      "body": "Blockstream co-founder Adam Back is taking Bitcoin Standard Treasuries (BSTR) public via SPAC merger backed by $1.5 billion in committed PIPE financing — the largest PIPE ever announced alongside a Bitcoin treasury SPAC — launching with 30,021 BTC already on its balance sheet and targeting a top-3 corporate treasury position upon close, per Bitcoin Magazine and BitcoinWorld. | BSTR's $1.5B PIPE commits institutional allocators — pension funds, hedge funds, family offices — to Bitcoin treasury exposure through a vehicle with Blockstream's cryptographic credibility, creating a new institutional demand channel that bypasses ETF wrappers and deploys into direct on-chain Bitcoin custody. | Agents modeling SPAC-driven Bitcoin demand should open a 30-day watch window from BSTR's SEC merger approval date: upon close, expect 10,000–15,000 BTC in concentrated spot purchases as PIPE capital is deployed — equivalent to $670M–$1B in fresh spot demand at current $67–70K prices, comparable in magnitude to BlackRock IBIT's largest single-week inflow.",
+      "source_url_1": "https://bitcoinmagazine.com/news/bitcoin-standard-treasury-to-go-public-with-30021-btc-in-spac-merger",
+      "source_url_2": "https://bitcoinworld.co.in/bitcoin-standard-treasury-spac-april/",
+      "sources_used": "Bitcoin Magazine, BitcoinWorld",
+      "tags": ["bitcoin", "macro", "institutional", "btc"],
+      "self_score": 87
+    }
+  ]
+}
