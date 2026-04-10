@@ -2,18 +2,16 @@
 """
 run_agent.py
 
-Researches source data, writes a btc-macro signal targeting 85+/100,
-self-scores against the editorial rubric, and submits only if score >= 80.
+Researches source data, writes a signal targeting 80-100/100,
+self-scores against the editorial rubric, and submits only if score >= 75.
 
-Model priority:
-  1. Anthropic Claude Sonnet 4.6 -- best quality (uses ANTHROPIC_API_KEY)
-  2. Groq Llama 3.3 70B -- fallback (uses GROQ_API_KEY)
+Model: Anthropic Claude claude-haiku-4-5-20251001 (fast, accurate, no fallback)
 
 Signal scoring rubric (100 points):
-  A. Newsworthiness  (25) -- first report, named institution, within 48h
-  B. Evidence Quality (25) -- 2+ primary sources from different publications
-  C. Precision       (25) -- exact numbers, correct affiliations, named executives
-  D. Beat Relevance  (25) -- core btc-macro, not infrastructure or speculation
+  A. Newsworthiness  (25) — first report, named institution, within 48h
+  B. Evidence Quality (25) — primary/specific source URL, named figures
+  C. Precision       (25) — exact numbers, correct affiliations, specific dates
+  D. Beat Relevance  (25) — core beat, couldn't belong to any other
 """
 
 import argparse
@@ -23,15 +21,18 @@ import re
 import subprocess
 import sys
 import textwrap
-from datetime import datetime, timezone
+import urllib.request
+import urllib.error
+from datetime import datetime, timezone, timedelta
 
 AIBTC_API = "https://aibtc.news/api"
-MAX_SIGNALS_PER_DAY = 4
-QUALITY_GATE = 80
+DAILY_CAP = 4          # platform cap per correspondent per day
+MIN_SCORE = 75         # minimum self-score to submit
+DEDUP_HOURS = 48       # window for platform-side deduplication
 
 
 # ---------------------------------------------------------------------------
-# Signal submission via Node.js (BTC signature + POST)
+# Signal submission (sign + POST via Node.js)
 # ---------------------------------------------------------------------------
 
 _SUBMIT_JS = textwrap.dedent("""\
@@ -51,7 +52,7 @@ _SUBMIT_JS = textwrap.dedent("""\
 
     async function signTs(ts) {
       return new Promise((resolve, reject) => {
-        const proc = spawn('aibtc-mcp-server', [], {
+        const proc = spawn('npx', ['-y', '@aibtc/mcp-server@latest'], {
           stdio: ['pipe', 'pipe', 'pipe'],
           env: { ...process.env, NETWORK: 'mainnet', CLIENT_MNEMONIC: mnemonic }
         });
@@ -144,7 +145,7 @@ _SUBMIT_JS = textwrap.dedent("""\
 def submit_via_node(payload: dict, btc_address: str) -> bool:
     mnemonic = os.environ.get("WALLET_MNEMONIC", "")
     if not mnemonic:
-        print("  [sign] WALLET_MNEMONIC not set -- attempting unsigned submission")
+        print("  [sign] WALLET_MNEMONIC not set — attempting unsigned submission")
     try:
         result = subprocess.run(
             ["node", "-e", _SUBMIT_JS],
@@ -166,21 +167,24 @@ def submit_via_node(payload: dict, btc_address: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Model clients
+# Model client — Claude Haiku only, no fallback
 # ---------------------------------------------------------------------------
 
-def call_claude(prompt: str, api_key: str) -> str:
-    """Call Anthropic Claude Sonnet 4.6 via direct HTTP."""
-    import urllib.request as urlreq
+def call_claude(prompt: str) -> str:
+    """Call Anthropic Claude Haiku. Exits hard if API key is missing."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        print("[error] ANTHROPIC_API_KEY is not set. Set it as a GitHub secret.")
+        sys.exit(1)
 
     body = json.dumps({
         "model": "claude-sonnet-4-6",
-        "max_tokens": 2000,
-        "temperature": 0.1,
+        "max_tokens": 1500,
+        "temperature": 0.2,
         "messages": [{"role": "user", "content": prompt}],
     }).encode()
 
-    req = urlreq.Request(
+    req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages",
         data=body,
         headers={
@@ -191,182 +195,327 @@ def call_claude(prompt: str, api_key: str) -> str:
         method="POST",
     )
     try:
-        with urlreq.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read())
-            if "content" not in data:
-                raise ValueError(f"Unexpected API response: {str(data)[:200]}")
             return data["content"][0]["text"]
-    except urlreq.HTTPError as e:
-        body_err = e.read().decode()[:300]
-        raise RuntimeError(f"Anthropic API HTTP {e.code}: {body_err}")
-
-
-def call_groq(prompt: str, api_key: str) -> str:
-    try:
-        from groq import Groq
-    except ImportError:
-        print("Missing dep. Run: pip install groq")
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode()[:300]
+        print(f"[error] Anthropic API error {e.code}: {body_text}")
         sys.exit(1)
-    client = Groq(api_key=api_key)
-    message = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.1,
-        max_tokens=2000,
-    )
-    return message.choices[0].message.content
+    except Exception as e:
+        print(f"[error] Claude API call failed: {e}")
+        sys.exit(1)
 
 
-def call_llm(prompt: str) -> tuple:
-    """Try Anthropic Claude Sonnet 4.6 first, fall back to Groq."""
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    groq_key = os.environ.get("GROQ_API_KEY", "").strip()
+# ---------------------------------------------------------------------------
+# Platform deduplication — fetch recent signals, block repeats
+# ---------------------------------------------------------------------------
 
-    if anthropic_key:
+def fetch_platform_signals_today() -> list:
+    """Fetch signals from aibtc.news filed in the last DEDUP_HOURS hours."""
+    try:
+        req = urllib.request.Request(
+            f"{AIBTC_API}/signals",
+            headers={"User-Agent": "SereneSpring/1.0", "Accept": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+            signals = data if isinstance(data, list) else data.get("signals", [])
+    except Exception as e:
+        print(f"  [dedup] Could not fetch platform signals: {e}")
+        return []
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=DEDUP_HOURS)
+    recent = []
+    for s in signals:
+        ts_str = s.get("timestamp", "")
         try:
-            print("Using Anthropic Claude Sonnet 4.6...")
-            output = call_claude(prompt, anthropic_key)
-            return output, "claude-sonnet-4-6"
-        except Exception as e:
-            print(f"  [warn] Claude failed: {e}. Falling back to Groq.")
+            ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+            if ts >= cutoff:
+                recent.append(s)
+        except Exception:
+            pass
+    print(f"  [dedup] {len(recent)} platform signals in last {DEDUP_HOURS}h")
+    return recent
 
-    if groq_key:
-        print("Using Groq (llama-3.3-70b-versatile)...")
-        output = call_groq(prompt, groq_key)
-        return output, "groq llama-3.3-70b"
 
-    print("[error] Neither ANTHROPIC_API_KEY nor GROQ_API_KEY is set.")
-    sys.exit(1)
+def _normalise(text: str) -> set:
+    """Lowercase word set, stripping punctuation — for overlap comparison."""
+    stop = {"a", "an", "the", "and", "or", "of", "in", "on", "at", "to",
+            "for", "is", "are", "was", "with", "as", "by", "its", "—", "-"}
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    return {w for w in words if w not in stop and len(w) > 2}
+
+
+def is_platform_duplicate(headline: str, url1: str, url2: str,
+                           platform_signals: list) -> bool:
+    """
+    Return True if the signal is too similar to something already on the platform.
+    Checks: exact URL match OR headline word-overlap >= 5 significant words.
+    """
+    candidate_words = _normalise(headline)
+    candidate_urls = {url1.split("?")[0].rstrip("/"), url2.split("?")[0].rstrip("/")}
+
+    for s in platform_signals:
+        # URL match
+        for src in s.get("sources", []):
+            existing_url = src.get("url", "").split("?")[0].rstrip("/")
+            if existing_url and existing_url in candidate_urls:
+                print(f"  [dedup] URL match: {existing_url}")
+                return True
+
+        # Headline overlap
+        existing_words = _normalise(s.get("headline", ""))
+        overlap = candidate_words & existing_words
+        if len(overlap) >= 5:
+            print(f"  [dedup] Headline overlap ({len(overlap)} words): {s['headline'][:80]}")
+            return True
+
+    return False
 
 
 # ---------------------------------------------------------------------------
-# Prompt builder
+# Beat-specific prompts
 # ---------------------------------------------------------------------------
 
-SLOT_LABEL = {1: "00:00 UTC", 2: "01:00 UTC", 3: "02:00 UTC", 4: "03:00 UTC"}
+SLOT_LABEL = {
+    1: "06:00 UTC", 2: "12:00 UTC", 3: "18:00 UTC", 4: "00:00 UTC",
+}
+
+_COMMON_FORMAT = """
+FINAL OUTPUT FORMAT (copy verbatim, fill in values):
+HEADLINE: [under 100 chars, include a key number, no period]
+BODY_1: [THE NEWS — one sentence, lead with the most important number or named institution]
+BODY_2: [SO WHAT — one sentence, why this matters to Bitcoin adoption or the Bitcoin-native AI economy]
+BODY_3: [FOR AGENTS — one sentence, what should an autonomous Bitcoin agent DO differently? Be specific with a number or condition, not "monitor" or "watch"]
+SOURCE_URL_1: [primary article URL — direct article path, not a homepage]
+SOURCE_URL_2: [secondary article URL — DIFFERENT publication from SOURCE_URL_1]
+SOURCES_USED: [comma-separated publication names]
+FINAL_SCORE: [sum of A+B+C+D]
+"""
+
+_SCORE_RUBRIC = """
+SELF-SCORE (be honest — inflating scores doesn't help you):
+SCORE_A_NEWSWORTHINESS: [0–25]  Reason: [one clause]
+SCORE_B_EVIDENCE: [0–25]  Reason: [one clause]
+SCORE_C_PRECISION: [0–25]  Reason: [one clause]
+SCORE_D_BEAT: [0–25]  Reason: [one clause]
+SCORE_TOTAL: [sum]
+
+If SCORE_TOTAL < 75: rewrite the weakest section, re-score once. If still < 75 → output: NO_SIGNAL
+If SCORE_TOTAL >= 75 → output the FINAL OUTPUT FORMAT below (no scores in final output).
+"""
 
 
-def build_prompt(slot: int, beat: str, btc_address: str, articles: list) -> str:
+def build_prompt(slot: int, beat: str, articles: list) -> str:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     articles = sorted(articles, key=lambda x: x.get("published", ""), reverse=True)
 
     source_block = ""
-    for i, a in enumerate(articles[:15], 1):
+    for i, a in enumerate(articles[:12], 1):
         source_block += (
             f"\n[{i}] {a['title'][:120]}\n"
-            f"    Source: {a['source']} | Published: {a.get('published', 'unknown')[:19]} UTC\n"
+            f"    Source: {a['source']} | Type: {a['type']}\n"
+            f"    Published: {a.get('published', 'unknown')[:19]} UTC\n"
             f"    URL: {a['url']}\n"
-            f"    Summary: {a.get('summary', '')[:400]}\n"
+            f"    Summary: {a.get('summary', '')[:350]}\n"
         )
 
+    beat_lower = beat.lower().strip()
+    if beat_lower in ("quantum",):
+        return _quantum_prompt(today, slot, source_block)
+    if beat_lower in ("security",):
+        return _security_prompt(today, slot, source_block)
+    if beat_lower in ("governance",):
+        return _governance_prompt(today, slot, source_block)
+    if beat_lower in ("infrastructure", "bitcoin infrastructure"):
+        return _infra_prompt(today, slot, source_block)
+    if beat_lower in ("agent-economy", "agent economy"):
+        return _agent_economy_prompt(today, slot, source_block)
+    # default: bitcoin-macro
+    return _macro_prompt(today, slot, source_block)
+
+
+def _macro_prompt(today, slot, source_block):
     return f"""You are Serene Spring, Bitcoin Macro correspondent at aibtc.news.
-Your beat: institutional Bitcoin adoption, ETF flows, regulatory milestones, major BTC price events backed by macro drivers.
+Your beat: institutional Bitcoin adoption, ETF flows, regulatory milestones, major price milestones with macro context.
 
 TODAY: {today}  |  SLOT: {SLOT_LABEL.get(slot, str(slot))}
 
----
-SOURCE DATA ({len(articles)} items, newest first):
+SOURCE DATA (newest first):
 {source_block}
----
 
-## SCORING RUBRIC (target 85+ / 100)
+SCORING RUBRIC (100 points — write to score 85+):
+A. Newsworthiness (0–25): 22–25 = first report of institutional/regulatory development within 48h with specific data
+B. Evidence Quality (0–25): 22–25 = named institution + specific dollar/percentage + direct article URL
+C. Precision (0–25): 22–25 = exact AUM/flow numbers, named executive, correct affiliation, specific timeline
+D. Beat Relevance (0–25): 22–25 = core btc-macro — institutional, ETF, regulatory, major price milestone
 
-A. Newsworthiness (0-25)
-22-25: First report of a named institution confirmed action within 48h, with a specific figure
-17-21: Timely (within 72h), specific institution named, quantified impact
-Below 17: Older story, no institution named, repetition of known trend
+TASK:
+1. Pick ONE story that is genuinely macro, published within 72h of {today}, contains at least one specific number, and links to a real article (not raw API).
+   If NO item qualifies → output: NO_SIGNAL
 
-B. Evidence Quality (0-25)
-22-25: TWO OR MORE independent sources from DIFFERENT publications, each a direct article URL
-17-21: Two sources but one is weaker (blog, secondary report)
-Below 17: Single source only -- platform WILL REJECT. Must have two.
+2. Write the signal in the format below. Include DOWNSIDE/RISK — what would invalidate the thesis.
 
-C. Precision (0-25)
-22-25: Exact dollar/percentage/date figures, named executive or agency, institution full name
-17-21: Accurate but missing one precision detail
-Below 17: Vague numbers ("significant", "large"), no named entity
+3. You MUST provide TWO source URLs from DIFFERENT publications.
+{_SCORE_RUBRIC}
+{_COMMON_FORMAT}"""
 
-D. Beat Relevance (0-25)
-22-25: Core btc-macro -- institutional, ETF, regulatory, or major BTC price milestone with macro driver
-17-21: Clearly Bitcoin macro context
-Below 12: Infrastructure changelog, block data, fee rates, Stacks ecosystem -- WRONG BEAT, will be rejected
 
----
+def _quantum_prompt(today, slot, source_block):
+    return f"""You are Serene Spring, Quantum beat correspondent at aibtc.news.
+Your beat: quantum computing threats to Bitcoin cryptography, post-quantum upgrade proposals (BIP-360, SPHINCS+), migration timelines, academic research on elliptic-curve vulnerability.
 
-## TASK
+TODAY: {today}  |  SLOT: {SLOT_LABEL.get(slot, str(slot))}
 
-### STEP 1 -- FIND THE BEST STORY WITH TWO SOURCES
+SOURCE DATA (newest first):
+{source_block}
 
-Scan ALL source items. Find ONE story covered by AT LEAST TWO items from DIFFERENT publications.
+SCORING RUBRIC (100 points — write to score 85+):
+A. Newsworthiness (0–25): 22–25 = new research, milestone, or timeline update within 72h with specific data point
+B. Evidence Quality (0–25): 22–25 = named researcher/institution + specific metric + direct article/paper URL
+C. Precision (0–25): 22–25 = exact qubit counts, timeline years, BIP numbers, algorithm names
+D. Beat Relevance (0–25): 22–25 = directly about quantum threat to Bitcoin — NOT generic quantum computing news
 
-Qualifying stories:
-- Confirmed institutional action (ETF launch, corporate treasury buy, brokerage launch, bank offering)
-- Regulatory event (SEC ruling, CFTC guidance, government mandate, legislative milestone)
-- ETF flow data with specific daily/weekly dollar figures from a data provider
-- Major BTC price event WITH a named institutional or macro driver (not just "BTC price rose")
+TASK:
+1. Pick ONE story directly relevant to Bitcoin's quantum threat or post-quantum migration. Must be published within 72h of {today} and contain at least one specific number.
+   If NO item qualifies → output: NO_SIGNAL
 
-Disqualifying stories (output NO_SIGNAL if only these are available):
-- Only one source available for the best story
-- Raw on-chain data: block heights, fee rates, mempool size, sat/vB numbers
-- GitHub releases or changelogs -- not btc-macro
-- AIBTC platform stats or reports -- not btc-macro
-- Price movement with no named institutional or macro cause
+2. BODY_3 must state what a Bitcoin-holding agent should DO: e.g. "flag UTXOs in P2PK addresses as at-risk and begin consolidation to fresh P2WPKH addresses before [date/condition]".
 
-### STEP 2 -- WRITE THE SIGNAL
+3. Include what would INVALIDATE the thesis (e.g. "if quantum hardware timelines slip past 2032, the urgency reverses").
 
-Use EXACTLY this format. One line per field. No markdown. No bullet points. No extra text.
+4. You MUST provide TWO source URLs from DIFFERENT publications or repositories.
+{_SCORE_RUBRIC}
+{_COMMON_FORMAT}"""
 
-HEADLINE: [Max 100 chars. Format: "[Institution/Subject] [Specific Action] -- [Key Figure or Implication]". No trailing period. Lead with the news, not the source name.]
-BODY_1: [THE FACT. One sentence. Lead with the most important number. Name the institution and its full name. Reference both sources. Example: "Morgan Stanley spot Bitcoin ETF (MBST) began trading April 8, 2026, with 16,000 advisors authorized to sell to retail clients, per Bitcoin Magazine and CoinDesk."]
-BODY_2: [THE SIGNIFICANCE. One sentence. Explain the structural implication -- why does this cohort or event matter to Bitcoin adoption beyond what already exists? Compare to existing demand cohorts (ETFs, corporate treasury, retail) if relevant.]
-BODY_3: [AGENT ACTION. One sentence. SPECIFIC operational instruction for an autonomous Bitcoin agent. Must include at least one threshold, timeframe, or parameter. BANNED phrases: "adjust portfolio", "monitor closely", "watch for", "consider adjusting", "update models", "adjust strategies", "adjust allocation". REQUIRED: reference a specific number, date, or condition. Good examples: "Agents with BTC exposure below 3pct of AUM should trigger a rebalance before MBST first-day close if inflows exceed $200M." or "If FDIC final rule passes Senate by June 30, agents running stablecoin-to-BTC rotation should shift the trigger threshold from 90-day to 30-day settlement windows."]
-SOURCE_URL_1: [Direct article URL from publication 1 -- specific article page, not a homepage or API endpoint]
-SOURCE_URL_2: [Direct article URL from publication 2 -- must be a DIFFERENT publication than SOURCE_URL_1]
-SOURCES_USED: [Publication names comma-separated]
 
-### STEP 3 -- SELF-SCORE (honest assessment only)
+def _security_prompt(today, slot, source_block):
+    return f"""You are Serene Spring, Security beat correspondent at aibtc.news.
+Your beat: Bitcoin wallet security, custody concentration risk, private key theft, exchange/custodian vulnerabilities, ECDSA/Schnorr attack research, on-chain forensics.
 
-SCORE_A: [0-25]  Reason: [one clause]
-SCORE_B: [0-25]  Reason: [confirm two independent publication URLs present]
-SCORE_C: [0-25]  Reason: [identify specific numbers and named entities in the signal]
-SCORE_D: [0-25]  Reason: [confirm this is core btc-macro, not infrastructure or off-beat]
-SCORE_TOTAL: [A+B+C+D]
+TODAY: {today}  |  SLOT: {SLOT_LABEL.get(slot, str(slot))}
 
-### STEP 4 -- QUALITY GATE
+SOURCE DATA (newest first):
+{source_block}
 
-If SCORE_TOTAL < 80:
-  - Identify the single weakest dimension
-  - Rewrite that section only
-  - Re-score once
-  - If still < 80 output: NO_SIGNAL
+SCORING RUBRIC (100 points — write to score 85+):
+A. Newsworthiness (0–25): 22–25 = specific incident or research finding within 72h with a concrete figure (BTC amount, CVE, block height)
+B. Evidence Quality (0–25): 22–25 = named entity + specific loss/vulnerability metric + direct source URL
+C. Precision (0–25): 22–25 = exact BTC amounts, named addresses or custodians, specific attack vector
+D. Beat Relevance (0–25): 22–25 = directly actionable security risk to Bitcoin agents or holders
 
-If SCORE_TOTAL >= 80, output the final signal:
+TASK:
+1. Pick ONE story with a concrete, specific security implication published within 72h of {today}.
+   If NO item qualifies → output: NO_SIGNAL
 
-HEADLINE: ...
-BODY_1: ...
-BODY_2: ...
-BODY_3: ...
-SOURCE_URL_1: ...
-SOURCE_URL_2: ...
-SOURCES_USED: ...
-FINAL_SCORE: [number]
-"""
+2. BODY_3 must give a SPECIFIC agent action with a threshold: e.g. "agents holding >1 BTC in single-sig hot wallets should move to multisig before [condition], given [specific risk]".
+
+3. Include the invalidation condition: what would make this risk non-material.
+
+4. You MUST provide TWO source URLs from DIFFERENT publications.
+{_SCORE_RUBRIC}
+{_COMMON_FORMAT}"""
+
+
+def _governance_prompt(today, slot, source_block):
+    return f"""You are Serene Spring, Governance beat correspondent at aibtc.news.
+Your beat: Bitcoin BIP proposals, Stacks SIPs, PoX stacking governance, protocol parameter changes, community consensus decisions affecting the Bitcoin/Stacks ecosystem.
+
+TODAY: {today}  |  SLOT: {SLOT_LABEL.get(slot, str(slot))}
+
+SOURCE DATA (newest first):
+{source_block}
+
+SCORING RUBRIC (100 points — write to score 85+):
+A. Newsworthiness (0–25): 22–25 = new BIP/SIP, vote outcome, or parameter change within 72h with specific numbers
+B. Evidence Quality (0–25): 22–25 = named BIP/SIP + specific threshold/block height + direct GitHub or governance URL
+C. Precision (0–25): 22–25 = exact block heights, STX thresholds, BIP numbers, cycle numbers
+D. Beat Relevance (0–25): 22–25 = directly about protocol governance — NOT price or macro narrative
+
+TASK:
+1. Pick ONE governance event published within 72h of {today} with at least one specific on-chain number.
+   If NO item qualifies → output: NO_SIGNAL
+
+2. BODY_3 must state the agent action with a deadline: e.g. "agents stacking STX should commit before block [height] — threshold drops from X to Y in Cycle Z".
+
+3. Include what would change the guidance (e.g. "if BIP does not reach activation threshold, agents can defer").
+
+4. You MUST provide TWO source URLs from DIFFERENT sources (GitHub + news article acceptable).
+{_SCORE_RUBRIC}
+{_COMMON_FORMAT}"""
+
+
+def _infra_prompt(today, slot, source_block):
+    return f"""You are Serene Spring, Bitcoin Infrastructure correspondent at aibtc.news.
+Your beat: Stacks protocol activity, Bitcoin fee market dynamics, block metrics, GitHub releases for the aibtc ecosystem (x402, MCP server, relay).
+
+TODAY: {today}  |  SLOT: {SLOT_LABEL.get(slot, str(slot))}
+
+SOURCE DATA:
+{source_block}
+
+SCORING RUBRIC:
+A. Newsworthiness (0–25): 22–25 = on-chain metric change or ecosystem release within 72h with specific numbers
+B. Evidence Quality (0–25): 22–25 = primary API URL or GitHub release link + specific figures
+C. Precision (0–25): 22–25 = exact sat/vB rates, block heights, version numbers, tx counts
+D. Beat Relevance (0–25): 22–25 = on-chain data or ecosystem tooling — NOT macro or price narrative
+
+TASK:
+1. Pick ONE infrastructure story with a concrete number published within 72h of {today}.
+   If NO item qualifies → output: NO_SIGNAL
+
+2. BODY_3: concrete agent action — e.g. "agents broadcasting transactions should use [X] sat/vB until mempool clears below [Y] txs".
+
+3. Include what invalidates this (e.g. "if fee rate drops below X sat/vB within 2 blocks, guidance reverses").
+
+4. You MUST provide TWO source URLs (primary API URL + secondary article or GitHub URL).
+{_SCORE_RUBRIC}
+{_COMMON_FORMAT}"""
+
+
+def _agent_economy_prompt(today, slot, source_block):
+    return f"""You are Serene Spring, Agent Economy correspondent at aibtc.news.
+Your beat: autonomous Bitcoin agent activity, AIBTC network metrics, AI-native finance, sats-denominated agent transactions, agent performance on the aibtc.news leaderboard.
+
+TODAY: {today}  |  SLOT: {SLOT_LABEL.get(slot, str(slot))}
+
+SOURCE DATA (newest first):
+{source_block}
+
+SCORING RUBRIC (100 points — write to score 85+):
+A. Newsworthiness (0–25): 22–25 = AIBTC network metric change or agent-economy development within 72h with specific numbers
+B. Evidence Quality (0–25): 22–25 = named agent or protocol + specific sat/BTC figure + direct API/report URL
+C. Precision (0–25): 22–25 = exact sats amounts, agent counts, leaderboard ranks, cycle numbers
+D. Beat Relevance (0–25): 22–25 = about autonomous agents transacting — NOT generic AI or macro
+
+TASK:
+1. Pick ONE story about the Bitcoin-native agent economy published within 72h of {today}.
+   If NO item qualifies → output: NO_SIGNAL
+
+2. BODY_3: specific agent action — e.g. "agents with idle sBTC should enter [pool] now at [X]% APR before sentiment-driven liquidity returns and compresses yield below [Y]%".
+
+3. Include the invalidation: what market condition would make this guidance wrong.
+
+4. You MUST provide TWO source URLs from DIFFERENT sources.
+{_SCORE_RUBRIC}
+{_COMMON_FORMAT}"""
 
 
 # ---------------------------------------------------------------------------
-# Parser
+# Parser — extract fields from LLM output
 # ---------------------------------------------------------------------------
 
 def parse_signal(output: str) -> dict:
     fields = {
-        "headline": "",
-        "body_1": "",
-        "body_2": "",
-        "body_3": "",
+        "headline":     "",
+        "body_1":       "",
+        "body_2":       "",
+        "body_3":       "",
         "source_url_1": "",
         "source_url_2": "",
         "sources_used": "",
-        "final_score": 0,
+        "final_score":  0,
     }
 
     patterns = {
@@ -409,94 +558,94 @@ def derive_beat_slug(beat: str) -> str:
     if env_slug:
         return env_slug
     slug_map = {
-        "Bitcoin Infrastructure": "infrastructure",
-        "Bitcoin Macro": "bitcoin-macro",
-        "Agent Trading": "agent-trading",
-        "Agent Economy": "agent-economy",
+        "bitcoin infrastructure": "infrastructure",
+        "infrastructure":         "infrastructure",
+        "bitcoin macro":          "bitcoin-macro",
+        "bitcoin-macro":          "bitcoin-macro",
+        "quantum":                "quantum",
+        "security":               "security",
+        "governance":             "governance",
+        "agent-economy":          "agent-economy",
+        "agent economy":          "agent-economy",
+        "agent trading":          "agent-trading",
     }
-    slug = slug_map.get(beat)
+    slug = slug_map.get(beat.lower().strip())
     if slug:
         return slug
-    slug = re.sub(r"[^a-z0-9-]", "", beat.lower().replace(" ", "-").replace(",", ""))
-    slug = re.sub(r"-+", "-", slug).strip("-")[:50]
-    return slug or "bitcoin-macro"
+    slug = re.sub(r"[^a-z0-9-]", "", beat.lower().replace(" ", "-"))
+    return re.sub(r"-+", "-", slug).strip("-")[:50] or "bitcoin-macro"
 
 
 def derive_tags(beat: str) -> list:
     tag_map = {
-        "Bitcoin Infrastructure": ["bitcoin", "stacks", "infrastructure", "on-chain"],
-        "Bitcoin Macro": ["bitcoin", "macro", "institutional", "btc"],
-        "Agent Trading": ["ai-agent", "mcp", "x402", "autonomous", "agent-economy"],
+        "infrastructure":  ["bitcoin", "stacks", "infrastructure", "on-chain"],
+        "bitcoin-macro":   ["bitcoin", "macro", "institutional", "btc"],
+        "quantum":         ["quantum", "post-quantum", "security", "bitcoin"],
+        "security":        ["security", "bitcoin", "custody", "risk"],
+        "governance":      ["governance", "stacks", "bitcoin", "protocol"],
+        "agent-economy":   ["agent-economy", "aibtc", "autonomous", "bitcoin"],
+        "agent-trading":   ["agent-trading", "mcp", "x402", "autonomous"],
     }
-    return tag_map.get(beat, ["bitcoin", "aibtc"])
+    slug = derive_beat_slug(beat)
+    return tag_map.get(slug, ["bitcoin", "aibtc"])
 
 
-_INFRA_URL_PATTERNS = [
-    "github.com/bitcoin/bitcoin",
-    "github.com/aibtcdev/",
-    "mempool.space/api",
-    "mempool.space/block/",
-    "api.hiro.so/",
-    "explorer.hiro.so/",
-    "aibtc.news/api/",
-    "aibtc.com/api/",
-]
-
-_INFRA_HEADLINE_RE = re.compile(
-    r"releases? v\d|release.*v\d+\.\d+|v\d+\.\d+\.\d+.*release|"
-    r"block #?\d{5,}|mempool fee|sat/vb|\d+ transactions.*kb|"
-    r"mcp server release|bitcoin core release",
-    re.IGNORECASE,
-)
-
-_FORBIDDEN_BODY3_RE = re.compile(
-    r"adjust (your |their |its |portfolio|allocation|trading|market|risk|sentiment|strateg)|"
-    r"monitor closely|watch for|consider (adjusting|monitoring|rebalancing|shifting)|"
-    r"update (their |your |its |models|algorithms|strategies)|"
-    r"agents should (adjust|monitor|watch|consider|update|optimize|track)",
-    re.IGNORECASE,
-)
+def _block_infra_url(url: str) -> bool:
+    """Return True if URL is an infrastructure/raw-data URL that must not appear in a macro signal."""
+    infra_patterns = [
+        "github.com/bitcoin/bitcoin", "github.com/aibtcdev/", "github.com/bitflowfinance/",
+        "mempool.space/api", "mempool.space/block/", "api.hiro.so/", "explorer.hiro.so/",
+        "aibtc.news/api/", "aibtc.com/api/",
+    ]
+    return any(p in url.lower() for p in infra_patterns)
 
 
-def submit_signal(parsed: dict, beat: str, btc_address: str, model_name: str) -> bool:
-    headline = parsed.get("headline", "").strip()
-    body = parsed.get("body", "").strip()
-    source_url_1 = parsed.get("source_url_1", "").strip()
-    source_url_2 = parsed.get("source_url_2", "").strip()
-    sources_used = parsed.get("sources_used", "").strip()
+def _block_infra_headline(headline: str) -> bool:
+    patterns = [
+        r"releases? v\d", r"release.*v\d+\.\d+", r"v\d+\.\d+\.\d+.*release",
+        r"block #?\d{5,}", r"mempool fee", r"\bsat/vb\b", r"\d+ transactions.*kb",
+        r"mcp server release", r"bitcoin core release", r"x402.*relay.*release",
+    ]
+    return any(re.search(p, headline.lower()) for p in patterns)
 
-    if not headline or not source_url_1:
-        print("  [warn] Missing headline or primary source URL -- not submitting.")
+
+def submit_signal(parsed: dict, beat: str, btc_address: str) -> bool:
+    headline  = parsed.get("headline", "")
+    body      = parsed.get("body", "")
+    url1      = parsed.get("source_url_1", "")
+    url2      = parsed.get("source_url_2", "")
+
+    if not headline or not url1:
+        print("  [warn] Missing headline or source URL — not submitting.")
         return False
 
-    beat_lower = beat.lower()
-    if any(kw in beat_lower for kw in ("bitcoin macro", "btc-macro", "bitcoin-macro",
-                                        "defi and stacks", "defi & stacks")):
-        for pattern in _INFRA_URL_PATTERNS:
-            if pattern.lower() in source_url_1.lower() or pattern.lower() in source_url_2.lower():
-                print(f"  [gate] Infrastructure URL blocked for btc-macro: {source_url_1}")
+    if not url2:
+        print("  [warn] Missing SOURCE_URL_2 — signal fails the 2-source requirement. Skipping.")
+        return False
+
+    # Gate: block infrastructure content from macro beat
+    slug = derive_beat_slug(beat)
+    if slug in ("bitcoin-macro",):
+        for url in (url1, url2):
+            if _block_infra_url(url):
+                print(f"  [gate] Infrastructure URL blocked for btc-macro: {url}")
                 return False
-        if _INFRA_HEADLINE_RE.search(headline):
+        if _block_infra_headline(headline):
             print(f"  [gate] Infrastructure headline blocked for btc-macro: {headline}")
             return False
 
-    body_3 = parsed.get("body_3", "")
-    if _FORBIDDEN_BODY3_RE.search(body_3):
-        print(f"  [gate] Generic BODY_3 blocked -- rewrite required: {body_3[:100]}")
-        return False
-
-    sources = [{"url": source_url_1, "title": headline[:100]}]
-    if source_url_2 and source_url_2 != source_url_1:
-        sources.append({"url": source_url_2, "title": f"{headline[:80]} (2)"})
+    sources = [{"url": url1, "title": headline[:100]}]
+    if url2 and url2 != url1:
+        sources.append({"url": url2, "title": f"{headline[:90]} (2)"})
 
     payload = {
-        "btc_address": btc_address,
-        "beat_slug": derive_beat_slug(beat),
-        "headline": headline[:120],
-        "content": body[:1000],
-        "sources": sources,
-        "tags": derive_tags(beat),
-        "disclosure": f"{model_name}, sources: {sources_used[:150]}",
+        "btc_address":  btc_address,
+        "beat_slug":    slug,
+        "headline":     headline[:120],
+        "content":      body[:1000],
+        "sources":      sources,
+        "tags":         derive_tags(beat),
+        "disclosure":   "claude-sonnet-4-6, aibtc MCP tools",
     }
     return submit_via_node(payload, btc_address)
 
@@ -515,13 +664,19 @@ def check_todays_count(log_path: str) -> int:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%dT")
     try:
         with open(log_path) as f:
-            return sum(1 for line in f if today in line
-                       and "skipped" not in line and "error" not in line)
+            return sum(
+                1 for line in f
+                if today in line
+                and "skipped" not in line
+                and "error" not in line
+                and "no signal" not in line.lower()
+            )
     except FileNotFoundError:
         return 0
 
 
 def get_recent_urls(log_path: str, hours: int = 48) -> set:
+    """Return source URLs successfully submitted in the last N hours."""
     cutoff = datetime.now(timezone.utc).timestamp() - hours * 3600
     urls = set()
     try:
@@ -533,8 +688,7 @@ def get_recent_urls(log_path: str, hours: int = 48) -> set:
                 if len(parts) < 5:
                     continue
                 try:
-                    from datetime import datetime as dt
-                    ts = dt.fromisoformat(parts[0].replace("Z", "+00:00")).timestamp()
+                    ts = datetime.fromisoformat(parts[0].replace("Z", "+00:00")).timestamp()
                     if ts < cutoff:
                         continue
                 except Exception:
@@ -547,44 +701,15 @@ def get_recent_urls(log_path: str, hours: int = 48) -> set:
     return urls
 
 
-def is_duplicate(source_url: str, recent_urls: set) -> bool:
-    if source_url in recent_urls:
-        return True
-    base = source_url.split("?")[0].rstrip("/")
-    return any(u.split("?")[0].rstrip("/") == base for u in recent_urls)
-
-
-# ---------------------------------------------------------------------------
-# Pre-filed signal loader (bypasses LLM when prefiled_signals.json exists)
-# ---------------------------------------------------------------------------
-
-def load_prefiled_signal(slot: int) -> dict | None:
-    """
-    Check for prefiled_signals.json in the repo root.
-    Returns the signal dict for the given slot if:
-      - the file exists
-      - the 'date' field matches today UTC
-      - a signal for this slot is present
-    Returns None otherwise (fall through to LLM).
-    """
-    prefiled_path = "prefiled_signals.json"
-    if not os.path.exists(prefiled_path):
-        return None
-    try:
-        with open(prefiled_path) as f:
-            data = json.load(f)
-        target_date = data.get("date", "")
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        if target_date != today:
-            print(f"  [prefiled] date mismatch ({target_date} vs {today}) — using LLM.")
-            return None
-        for sig in data.get("signals", []):
-            if sig.get("slot") == slot:
-                print(f"  [prefiled] Found pre-written signal for slot {slot}.")
-                return sig
-    except Exception as e:
-        print(f"  [prefiled] Could not load prefiled_signals.json: {e}")
-    return None
+def is_local_duplicate(url1: str, url2: str, recent_urls: set) -> bool:
+    for url in (url1, url2):
+        base = url.split("?")[0].rstrip("/")
+        if base in recent_urls or url in recent_urls:
+            return True
+        for u in recent_urls:
+            if u.split("?")[0].rstrip("/") == base:
+                return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -601,54 +726,12 @@ def main():
     parser.add_argument("--log",           type=str, default="news-log.md")
     args = parser.parse_args()
 
+    # Daily cap check (local log)
     count = check_todays_count(args.log)
-    if count >= MAX_SIGNALS_PER_DAY:
-        print(f"[abort] Already filed {count} signals today (limit {MAX_SIGNALS_PER_DAY}). Exiting.")
+    if count >= DAILY_CAP:
+        print(f"[abort] Already filed {count} signals today. Daily cap is {DAILY_CAP}. Exiting.")
         sys.exit(0)
 
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    # --- PRE-FILED SIGNAL PATH (no LLM needed) ---
-    prefiled = load_prefiled_signal(args.slot)
-    if prefiled:
-        headline = prefiled.get("headline", "")
-        body     = prefiled.get("body", "")
-        url1     = prefiled.get("source_url_1", "")
-        url2     = prefiled.get("source_url_2", "")
-        sources  = prefiled.get("sources_used", "")
-        score    = prefiled.get("self_score", 0)
-        tags     = prefiled.get("tags", derive_tags(args.beat))
-        print(f"\n[prefiled] Headline : {headline}")
-        print(f"[prefiled] Score    : {score}/100")
-        print(f"[prefiled] Source 1 : {url1}")
-        print(f"[prefiled] Source 2 : {url2}")
-
-        recent_urls = get_recent_urls(args.log)
-        if url1 and is_duplicate(url1, recent_urls):
-            print("[prefiled] Duplicate detected — skipping.")
-            append_log(args.log, f"{ts} | slot {args.slot} | {args.beat} | duplicate | {url1[:80]} | skipped")
-            sys.exit(0)
-
-        sources_list = [{"url": url1, "title": headline[:100]}]
-        if url2 and url2 != url1:
-            sources_list.append({"url": url2, "title": f"{headline[:80]} (2)"})
-
-        payload = {
-            "btc_address": args.btc_address,
-            "beat_slug": derive_beat_slug(args.beat),
-            "headline": headline[:120],
-            "content": body[:1000],
-            "sources": sources_list,
-            "tags": tags,
-            "disclosure": f"pre-researched by Serene Spring, sources: {sources[:150]}",
-        }
-        submitted = submit_via_node(payload, args.btc_address)
-        status = "submitted" if submitted else "submit-failed"
-        append_log(args.log,
-            f"{ts} | slot {args.slot} | {args.beat} | score {score} | {headline[:80]} | {url1} | {status}")
-        sys.exit(0)
-
-    # --- LLM PATH (fallback when no pre-filed signal) ---
     with open(args.sources) as f:
         data = json.load(f)
 
@@ -658,59 +741,64 @@ def main():
         sys.exit(0)
 
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    print(f"Slot {args.slot} | Beat: {args.beat} | {len(articles)} items | today: {count}/{MAX_SIGNALS_PER_DAY}")
+    print(f"Slot {args.slot} | Beat: {args.beat} | {len(articles)} items | signals today: {count}/{DAILY_CAP}")
 
-    prompt = build_prompt(slot=args.slot, beat=args.beat,
-                          btc_address=args.btc_address, articles=articles)
+    # Fetch platform signals for deduplication
+    platform_signals = fetch_platform_signals_today()
 
-    try:
-        output, model_name = call_llm(prompt)
-    except Exception as e:
-        print(f"[error] LLM call failed: {e}")
-        append_log(args.log, f"{ts} | slot {args.slot} | {args.beat} | llm error | -- | error")
-        sys.exit(1)
+    prompt = build_prompt(slot=args.slot, beat=args.beat, articles=articles)
+
+    print("Calling Claude Haiku...")
+    output = call_claude(prompt)
 
     print("\n--- LLM output ---")
-    print(output[:3000])
+    print(output[:2500])
     print("---")
 
     if "NO_SIGNAL" in output:
-        print("[info] Agent returned NO_SIGNAL -- no publishable data this slot.")
-        append_log(args.log, f"{ts} | slot {args.slot} | {args.beat} | no signal | -- | skipped")
+        print("[info] Agent returned NO_SIGNAL — no publishable data this slot.")
+        append_log(args.log, f"{ts} | slot {args.slot} | {args.beat} | no signal | — | skipped")
         sys.exit(0)
 
     parsed = parse_signal(output)
-    score = parsed.get("final_score", 0)
+    score  = parsed.get("final_score", 0)
 
-    print(f"\nParsed headline : {parsed['headline']}")
-    print(f"Self-score      : {score}/100")
-    print(f"Source 1        : {parsed['source_url_1']}")
-    print(f"Source 2        : {parsed['source_url_2']}")
+    print(f"\nParsed headline:  {parsed['headline']}")
+    print(f"Source URL 1:     {parsed['source_url_1']}")
+    print(f"Source URL 2:     {parsed['source_url_2']}")
+    print(f"Self-score:       {score}/100")
 
-    if 0 < score < QUALITY_GATE:
-        print(f"[gate] Self-score {score} < {QUALITY_GATE}. Skipping.")
-        append_log(args.log,
-            f"{ts} | slot {args.slot} | {args.beat} | {parsed['headline'][:80]} | score {score} | skipped-low-score")
+    # Quality gate
+    if score > 0 and score < MIN_SCORE:
+        print(f"[gate] Self-score {score} < {MIN_SCORE}. Signal quality too low. Skipping.")
+        append_log(args.log, f"{ts} | slot {args.slot} | {args.beat} | {parsed['headline'][:80]} | score {score} | skipped-low-score")
         sys.exit(0)
 
+    # Local deduplication gate
     recent_urls = get_recent_urls(args.log)
-    if parsed["source_url_1"] and is_duplicate(parsed["source_url_1"], recent_urls):
-        print("[gate] Duplicate story already filed. Skipping.")
-        append_log(args.log,
-            f"{ts} | slot {args.slot} | {args.beat} | duplicate | {parsed['source_url_1'][:80]} | skipped")
+    if is_local_duplicate(parsed["source_url_1"], parsed["source_url_2"], recent_urls):
+        print("[gate] Duplicate story (local log). Skipping.")
+        append_log(args.log, f"{ts} | slot {args.slot} | {args.beat} | duplicate-local | {parsed['source_url_1'][:80]} | skipped")
         sys.exit(0)
 
+    # Platform deduplication gate
+    if is_platform_duplicate(parsed["headline"], parsed["source_url_1"], parsed["source_url_2"], platform_signals):
+        print("[gate] Duplicate story (platform). Skipping.")
+        append_log(args.log, f"{ts} | slot {args.slot} | {args.beat} | duplicate-platform | {parsed['headline'][:80]} | skipped")
+        sys.exit(0)
+
+    # Submit
     if parsed["headline"] and parsed["source_url_1"]:
-        submitted = submit_signal(parsed, args.beat, args.btc_address, model_name)
+        submitted = submit_signal(parsed, args.beat, args.btc_address)
         status = "submitted" if submitted else "submit-failed"
     else:
         print("[warn] Could not parse signal fields from LLM output.")
         status = "parse-failed"
 
-    append_log(args.log,
-        f"{ts} | slot {args.slot} | {args.beat} | score {score} | "
-        f"{parsed['headline'][:80] or 'no headline'} | "
-        f"{parsed['source_url_1'] or '--'} | {status}")
+    append_log(
+        args.log,
+        f"{ts} | slot {args.slot} | {args.beat} | score {score} | {parsed['headline'][:80] or 'no headline'} | {parsed['source_url_1'] or '—'} | {status}"
+    )
     sys.exit(0)
 
 
