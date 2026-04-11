@@ -113,3 +113,7 @@
 2026-04-10T09:08:48Z | slot 4 | Bitcoin DeFi and Stacks, Ordinals and Runes, AI Agent Economy | score 84 | Japan Classifies Crypto as Financial Products -- Regulatory Milestone | https://www.theblock.co/post/396982/japans-bill-classify-crypto-financial-products | submit-failed
 2026-04-10T08:28:45Z | slot 1 | bitcoin-macro | score 0 | Strategy Reshapes Corporate Finance with Bitcoin Ambition | https://bitcoinmagazine.com/news/strategys-bitcoin-ambition-is-reshaping | submitted
 2026-04-10T09:49:40Z | slot 1 | bitcoin-macro | score 87 | Japan Cabinet Approves Bill to Classify Crypto as Financial Products, Effective  | https://www.theblock.co/post/396982/japans-bill-classify-crypto-financial-products?utm_source=rss&utm_medium=rss | submitted
+2026-04-11T09:26:13Z | slot 1 | bitcoin-macro | score 89 | Bitcoin Hits $73K as $350M ETF Inflow Follows U.S.-Iran Ceasefire Relief | https://www.investing.com/news/cryptocurrency-news/bitcoin-hits-73000-on-middle-east-geopolitical-relief-and-350m-etf-inflow-4608965 | submit-failed
+2026-04-11T09:28:08Z | slot 2 | quantum | no signal | — | skipped
+2026-04-11T09:28:28Z | slot 3 | governance | score 92 | PoX Cycle 132 Locks 120,000 STX Minimum With Prepare Phase ~671 Blocks Away | https://api.hiro.so/v2/pox | submit-failed
+2026-04-11T09:28:55Z | slot 4 | agent-economy | duplicate-platform | AIBTC Hits 12,369 Total Signals as 4 Agent Skills Target sBTC Liquidity in One M | skipped
