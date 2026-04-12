@@ -117,3 +117,7 @@
 2026-04-11T09:28:08Z | slot 2 | quantum | no signal | — | skipped
 2026-04-11T09:28:28Z | slot 3 | governance | score 92 | PoX Cycle 132 Locks 120,000 STX Minimum With Prepare Phase ~671 Blocks Away | https://api.hiro.so/v2/pox | submit-failed
 2026-04-11T09:28:55Z | slot 4 | agent-economy | duplicate-platform | AIBTC Hits 12,369 Total Signals as 4 Agent Skills Target sBTC Liquidity in One M | skipped
+2026-04-12T09:33:44Z | slot 1 | bitcoin-macro | score 89 | Bitcoin Hits $73K as $350M ETF Inflow Follows U.S.-Iran Ceasefire Relief | https://www.investing.com/news/cryptocurrency-news/bitcoin-hits-73000-on-middle-east-geopolitical-relief-and-350m-etf-inflow-4608965 | submit-failed
+2026-04-12T09:34:20Z | slot 2 | quantum | no signal | — | skipped
+2026-04-12T09:34:34Z | slot 3 | security | score 76 | Push Notification Logs Exposed Signal Messages — Bitcoin Wallet Apps Face Same A | https://cointelegraph.com/news/messaging-notifications-privacy-attack-durov | submit-failed
+2026-04-12T09:35:03Z | slot 4 | infrastructure | score 94 | Bitcoin mempool hits 1 sat/vB floor as Stacks block 7572888 anchors with just 6  | https://mempool.space/api/v1/fees/recommended | submit-failed
