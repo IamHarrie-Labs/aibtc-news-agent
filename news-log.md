@@ -121,3 +121,7 @@
 2026-04-12T09:34:20Z | slot 2 | quantum | no signal | — | skipped
 2026-04-12T09:34:34Z | slot 3 | security | score 76 | Push Notification Logs Exposed Signal Messages — Bitcoin Wallet Apps Face Same A | https://cointelegraph.com/news/messaging-notifications-privacy-attack-durov | submit-failed
 2026-04-12T09:35:03Z | slot 4 | infrastructure | score 94 | Bitcoin mempool hits 1 sat/vB floor as Stacks block 7572888 anchors with just 6  | https://mempool.space/api/v1/fees/recommended | submit-failed
+2026-04-13T11:53:24Z | slot 1 | bitcoin-macro | score 92 | Bitcoin funds pull $1.1B in strongest inflow week since January despite $71K dip | https://www.theblock.co/post/397191/crypto-funds-pull-in-1-1-billion-as-bitcoin-products-lead-strongest-inflow-week-since-january-coinshares | submit-failed
+2026-04-13T11:55:17Z | slot 2 | quantum | score 82 | QUT Professor Says Quantum Threat to Bitcoin's Elliptic-Curve Keys Arriving Fast | https://thequantuminsider.com/2026/04/13/the-conversation-quantum-computers-are-coming-to-break-our-codes-faster-than-anyone-expected/ | submit-failed
+2026-04-13T11:57:21Z | slot 3 | governance | duplicate-platform | PoX Cycle 132 Live: 120,000 STX Minimum Threshold, Prepare Phase ~361 Blocks Out | skipped
+2026-04-13T11:57:53Z | slot 4 | agent-economy | score 84 | AIBTC Skills Comp Day 10 logs ALEX Swap PR as network hits 14,188 total signals | https://github.com/BitflowFinance/bff-skills/pull/291 | submit-failed
