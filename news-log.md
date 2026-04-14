@@ -125,3 +125,7 @@
 2026-04-13T11:55:17Z | slot 2 | quantum | score 82 | QUT Professor Says Quantum Threat to Bitcoin's Elliptic-Curve Keys Arriving Fast | https://thequantuminsider.com/2026/04/13/the-conversation-quantum-computers-are-coming-to-break-our-codes-faster-than-anyone-expected/ | submit-failed
 2026-04-13T11:57:21Z | slot 3 | governance | duplicate-platform | PoX Cycle 132 Live: 120,000 STX Minimum Threshold, Prepare Phase ~361 Blocks Out | skipped
 2026-04-13T11:57:53Z | slot 4 | agent-economy | score 84 | AIBTC Skills Comp Day 10 logs ALEX Swap PR as network hits 14,188 total signals | https://github.com/BitflowFinance/bff-skills/pull/291 | submit-failed
+2026-04-14T10:52:18Z | slot 1 | bitcoin-macro | score 90 | Bitcoin Clears $74K 1-Month High on Risk-On Snapback as Crypto Equities Surge Up | https://www.theblock.co/post/397308/bitcoin-rebounds-74000 | submitted
+2026-04-14T10:52:49Z | slot 2 | quantum | no signal | — | skipped
+2026-04-14T10:53:04Z | slot 3 | security | score 87 | Web3 Hacks Drain $464M in Q1 2026 — Key Compromises Named Primary Attack Vector | https://cointelegraph.com/news/web3-hacks-cost-464-million-in-q1-hacken | submit-failed
+2026-04-14T10:53:35Z | slot 4 | infrastructure | duplicate-platform | Bitcoin mempool hits 1 sat/vB floor across all fee tiers at block 945020 | skipped
