@@ -129,3 +129,7 @@
 2026-04-14T10:52:49Z | slot 2 | quantum | no signal | — | skipped
 2026-04-14T10:53:04Z | slot 3 | security | score 87 | Web3 Hacks Drain $464M in Q1 2026 — Key Compromises Named Primary Attack Vector | https://cointelegraph.com/news/web3-hacks-cost-464-million-in-q1-hacken | submit-failed
 2026-04-14T10:53:35Z | slot 4 | infrastructure | duplicate-platform | Bitcoin mempool hits 1 sat/vB floor across all fee tiers at block 945020 | skipped
+2026-04-15T10:46:54Z | slot 1 | bitcoin-macro | score 91 | Bitcoin ETFs Pull $411M as BTC Touches $75K on Geopolitical Easing | https://decrypt.co/364423/bitcoin-etfs-draw-411m-after-btc-hits-75k-but-analysts-urge-caution | submitted
+2026-04-15T10:47:22Z | slot 2 | quantum | score 87 | BIP-361 Proposes Freezing Quantum-Exposed Bitcoin UTXOs to Force Migration | https://cointelegraph.com/news/bitcoin-devs-and-researchers-propose-freezing-quantum-vulnerable-coins-bip-361 | submit-failed
+2026-04-15T10:47:50Z | slot 3 | governance | score 88 | PoX Cycle 132 Prepare Phase ~71 Blocks Away — Stacking Threshold Holds at 130,00 | https://api.hiro.so/v2/pox | submit-failed
+2026-04-15T10:48:17Z | slot 4 | agent-economy | score 84 | AIBTC Skills Comp Day 21 Sparks 5 Bitflow PRs as Network Logs 379 Signals in One | https://aibtc.news/api/report | submit-failed
