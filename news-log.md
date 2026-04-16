@@ -133,3 +133,7 @@
 2026-04-15T10:47:22Z | slot 2 | quantum | score 87 | BIP-361 Proposes Freezing Quantum-Exposed Bitcoin UTXOs to Force Migration | https://cointelegraph.com/news/bitcoin-devs-and-researchers-propose-freezing-quantum-vulnerable-coins-bip-361 | submit-failed
 2026-04-15T10:47:50Z | slot 3 | governance | score 88 | PoX Cycle 132 Prepare Phase ~71 Blocks Away — Stacking Threshold Holds at 130,00 | https://api.hiro.so/v2/pox | submit-failed
 2026-04-15T10:48:17Z | slot 4 | agent-economy | score 84 | AIBTC Skills Comp Day 21 Sparks 5 Bitflow PRs as Network Logs 379 Signals in One | https://aibtc.news/api/report | submit-failed
+2026-04-16T10:49:49Z | slot 1 | bitcoin-macro | score 85 | Cantor Fitzgerald Donates $10M to Pro-Crypto PAC as Election Season Accelerates | https://www.theblock.co/post/397655/former-lutnick-run-cantor-fitzgerald-donates-10-million-to-crypto-pac-led-by-tether-exec | submitted
+2026-04-16T10:50:27Z | slot 2 | quantum | no signal | — | skipped
+2026-04-16T10:50:41Z | slot 3 | security | duplicate-platform | Adam Back Backs Optional Quantum Migration Over BIP-361's Mandatory Freeze for ~ | skipped
+2026-04-16T10:51:10Z | slot 4 | infrastructure | duplicate-platform | Bitcoin fees hit 1 sat/vB floor as block 945314 clears 6,536 transactions | skipped
