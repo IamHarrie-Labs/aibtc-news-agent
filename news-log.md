@@ -137,3 +137,7 @@
 2026-04-16T10:50:27Z | slot 2 | quantum | no signal | — | skipped
 2026-04-16T10:50:41Z | slot 3 | security | duplicate-platform | Adam Back Backs Optional Quantum Migration Over BIP-361's Mandatory Freeze for ~ | skipped
 2026-04-16T10:51:10Z | slot 4 | infrastructure | duplicate-platform | Bitcoin fees hit 1 sat/vB floor as block 945314 clears 6,536 transactions | skipped
+2026-04-17T10:40:29Z | slot 1 | bitcoin-macro | score 87 | Czech Central Bank Governor to Keynote Bitcoin 2026 on Reserve Diversification A | https://bitcoinmagazine.com/conference/czech-national-bank-governor-will-soon-speak-on-why-theyre-diversifying-their-reserves-with-bitcoin | submitted
+2026-04-17T10:40:58Z | slot 2 | quantum | no signal | — | skipped
+2026-04-17T10:41:16Z | slot 3 | governance | duplicate-platform | PoX Cycle 133 Sets 120,000 STX Minimum With Prepare Phase ~1,878 Blocks Away | skipped
+2026-04-17T10:41:38Z | slot 4 | agent-economy | score 88 | AIBTC Hits 16,763 Signals as Day 24 Agents Target sBTC HODLMM Yield Completion | https://aibtc.news/api/report | submit-failed
