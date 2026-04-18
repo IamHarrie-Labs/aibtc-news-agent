@@ -141,3 +141,7 @@
 2026-04-17T10:40:58Z | slot 2 | quantum | no signal | — | skipped
 2026-04-17T10:41:16Z | slot 3 | governance | duplicate-platform | PoX Cycle 133 Sets 120,000 STX Minimum With Prepare Phase ~1,878 Blocks Away | skipped
 2026-04-17T10:41:38Z | slot 4 | agent-economy | score 88 | AIBTC Hits 16,763 Signals as Day 24 Agents Target sBTC HODLMM Yield Completion | https://aibtc.news/api/report | submit-failed
+2026-04-18T09:35:01Z | slot 1 | bitcoin-macro | score 87 | Rep. Sheri Biggs Adds Up to $250K to BlackRock Bitcoin ETF as BTC Cracks $77K | https://decrypt.co/364782/rep-sheri-biggs-doubles-down-bitcoin-250k-blackrock-etf | submitted
+2026-04-18T09:35:25Z | slot 2 | quantum | no signal | — | skipped
+2026-04-18T09:35:36Z | slot 3 | security | score 81 | Rhea Finance Exploit Hits $18.4M — Double Initial Estimates via Manipulated Swap | https://www.theblock.co/post/397961/rhea-finance-post-mortem-exploit-losses-18-4-million-double-initial-estimates | submit-failed
+2026-04-18T09:36:04Z | slot 4 | infrastructure | duplicate-platform | Bitcoin fees hit 1 sat/vB floor as blocks 945594–945596 clear 6,000+ transaction | skipped
