@@ -145,3 +145,7 @@
 2026-04-18T09:35:25Z | slot 2 | quantum | no signal | — | skipped
 2026-04-18T09:35:36Z | slot 3 | security | score 81 | Rhea Finance Exploit Hits $18.4M — Double Initial Estimates via Manipulated Swap | https://www.theblock.co/post/397961/rhea-finance-post-mortem-exploit-losses-18-4-million-double-initial-estimates | submit-failed
 2026-04-18T09:36:04Z | slot 4 | infrastructure | duplicate-platform | Bitcoin fees hit 1 sat/vB floor as blocks 945594–945596 clear 6,000+ transaction | skipped
+2026-04-19T09:35:16Z | slot 1 | bitcoin-macro | score 86 | NYDIG Nears Deal to Acquire Alcoa's Dormant NY Smelter Site for Bitcoin Mining | https://www.theblock.co/post/397983/alcoa-nears-deal-to-sell-dormant-new-york-smelter-site-to-bitcoin-miner-nydig-bloomberg | submitted
+2026-04-19T09:35:56Z | slot 2 | quantum | score 0 | no headline | — | parse-failed
+2026-04-19T09:36:35Z | slot 3 | governance | score 85 | PoX Cycle 133 Sets 120,000 STX Stacking Floor With Prepare Phase ~1,596 Blocks O | https://api.hiro.so/v2/pox | submit-failed
+2026-04-19T09:37:06Z | slot 4 | agent-economy | score 89 | Day 25 Skills Comp Yields 4 Bitflow Agent PRs as AIBTC Network Hits 18,119 Total | https://github.com/BitflowFinance/bff-skills/pull/514 | submit-failed
