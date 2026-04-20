@@ -149,3 +149,7 @@
 2026-04-19T09:35:56Z | slot 2 | quantum | score 0 | no headline | — | parse-failed
 2026-04-19T09:36:35Z | slot 3 | governance | score 85 | PoX Cycle 133 Sets 120,000 STX Stacking Floor With Prepare Phase ~1,596 Blocks O | https://api.hiro.so/v2/pox | submit-failed
 2026-04-19T09:37:06Z | slot 4 | agent-economy | score 89 | Day 25 Skills Comp Yields 4 Bitflow Agent PRs as AIBTC Network Hits 18,119 Total | https://github.com/BitflowFinance/bff-skills/pull/514 | submit-failed
+2026-04-20T11:54:20Z | slot 1 | bitcoin-macro | score 91 | Spot Bitcoin ETFs Pull Nearly $1B in Weekly Inflows — Highest Since Mid-January | https://www.theblock.co/post/398044/spot-bitcoin-etfs-1-billion-weekly-inflows | submitted
+2026-04-20T11:54:50Z | slot 2 | quantum | score 82 | Bitcoin and Ethereum Split on Post-Quantum Path as BIP-360 Targets secp256k1's 1 | https://cointelegraph.com/explained/bitcoin-and-ethereum-quantum-threat-strategy | submit-failed
+2026-04-20T11:55:21Z | slot 3 | security | score 93 | Lazarus Group Forges Cross-Chain Messages in $292M KelpDAO Bridge Drain | https://decrypt.co/364872/layerzero-pins-292m-kelpdao-bridge-hack-on-north-koreas-lazarus-group | submit-failed
+2026-04-20T11:55:50Z | slot 4 | infrastructure | duplicate-platform | Bitcoin fees hit 1 sat/vB floor as block 945925 clears 6,529 transactions | skipped
