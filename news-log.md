@@ -153,3 +153,7 @@
 2026-04-20T11:54:50Z | slot 2 | quantum | score 82 | Bitcoin and Ethereum Split on Post-Quantum Path as BIP-360 Targets secp256k1's 1 | https://cointelegraph.com/explained/bitcoin-and-ethereum-quantum-threat-strategy | submit-failed
 2026-04-20T11:55:21Z | slot 3 | security | score 93 | Lazarus Group Forges Cross-Chain Messages in $292M KelpDAO Bridge Drain | https://decrypt.co/364872/layerzero-pins-292m-kelpdao-bridge-hack-on-north-koreas-lazarus-group | submit-failed
 2026-04-20T11:55:50Z | slot 4 | infrastructure | duplicate-platform | Bitcoin fees hit 1 sat/vB floor as block 945925 clears 6,529 transactions | skipped
+2026-04-21T10:55:52Z | slot 1 | bitcoin-macro | score 79 | Bitcoin Clears $76K as Warsh Fed Hearing and US-Iran Talks Reshape Macro Backdro | https://www.investing.com/news/cryptocurrency-news/bitcoin-price-today-rises-above-76k-as-traders-eye-usiran-talks-warsh-hearing-4625112 | submitted
+2026-04-21T10:56:24Z | slot 2 | quantum | score 0 | Ripple's XRPL Quantum Migration Plan Highlights Bitcoin's Unresolved BIP-360 Gap | — | parse-failed
+2026-04-21T10:57:00Z | slot 3 | governance | score 85 | PoX Cycle 133 Sets 120,000 STX Minimum — Prepare Phase ~1,311 Blocks Away | https://api.hiro.so/v2/pox | submit-failed
+2026-04-21T10:57:40Z | slot 4 | agent-economy | score 88 | AIBTC Network Hits 19,587 Total Signals as Day 25 Yield Router Skill Enters Comp | https://aibtc.news/api/report | submit-failed
