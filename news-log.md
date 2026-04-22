@@ -157,3 +157,7 @@
 2026-04-21T10:56:24Z | slot 2 | quantum | score 0 | Ripple's XRPL Quantum Migration Plan Highlights Bitcoin's Unresolved BIP-360 Gap | — | parse-failed
 2026-04-21T10:57:00Z | slot 3 | governance | score 85 | PoX Cycle 133 Sets 120,000 STX Minimum — Prepare Phase ~1,311 Blocks Away | https://api.hiro.so/v2/pox | submit-failed
 2026-04-21T10:57:40Z | slot 4 | agent-economy | score 88 | AIBTC Network Hits 19,587 Total Signals as Day 25 Yield Router Skill Enters Comp | https://aibtc.news/api/report | submit-failed
+2026-04-22T10:53:11Z | slot 1 | bitcoin-macro | score 88 | Bitcoin Reclaims $78K on ETF Inflows and Short Squeeze as $418M Liquidated | https://www.theblock.co/post/398407/bitcoin-78000-escapes-extreme-fear | submitted
+2026-04-22T10:53:40Z | slot 2 | quantum | score 83 | Coinbase Quantum Board Flags Bitcoin as Less Prepared Than Algorand & Aptos — BI | https://cointelegraph.com/news/coinbase-says-algorand-aptos-better-prepped-for-quantum-threat | submit-failed
+2026-04-22T10:54:08Z | slot 3 | security | score 83 | Sui-Based Volo Protocol Loses $3.5M in Vault Exploit — Wrapped BTC Agents on Ale | https://cointelegraph.com/news/volo-defi-3-5m-exploit-vault-attack-recovery | submit-failed
+2026-04-22T10:54:53Z | slot 4 | infrastructure | duplicate-platform | Bitcoin Mempool Hits 4 sat/vB Fastest Fee as Blocks Clear 3,700+ Transactions | skipped
