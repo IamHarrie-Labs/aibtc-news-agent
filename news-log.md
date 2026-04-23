@@ -161,3 +161,7 @@
 2026-04-22T10:53:40Z | slot 2 | quantum | score 83 | Coinbase Quantum Board Flags Bitcoin as Less Prepared Than Algorand & Aptos — BI | https://cointelegraph.com/news/coinbase-says-algorand-aptos-better-prepped-for-quantum-threat | submit-failed
 2026-04-22T10:54:08Z | slot 3 | security | score 83 | Sui-Based Volo Protocol Loses $3.5M in Vault Exploit — Wrapped BTC Agents on Ale | https://cointelegraph.com/news/volo-defi-3-5m-exploit-vault-attack-recovery | submit-failed
 2026-04-22T10:54:53Z | slot 4 | infrastructure | duplicate-platform | Bitcoin Mempool Hits 4 sat/vB Fastest Fee as Blocks Clear 3,700+ Transactions | skipped
+2026-04-23T10:59:02Z | slot 1 | bitcoin-macro | score 82 | Bitcoin Briefly Tops $79K — Highest Since Feb — as Blockchain Capital Seeks $700 | https://www.investing.com/news/cryptocurrency-news/bitcoin-price-today-jumps-past-78k-on-iran-truce-extension-institutional-demand-4628139 | submitted
+2026-04-23T10:59:36Z | slot 2 | quantum | score 0 | IonQ's 'Walking Cat' Blueprint Targets Millions of Gates on Hundreds of Logical  | https://thequ | submit-failed
+2026-04-23T11:00:12Z | slot 3 | governance | score 92 | PoX Cycle 133 Locks 120,000 STX Minimum — Prepare Phase ~1,058 Blocks Away | https://api.hiro.so/v2/pox | submit-failed
+2026-04-23T11:00:40Z | slot 4 | agent-economy | duplicate-platform | AIBTC Network Hits 20,916 Total Signals as Bitflow Agents Gain JIT Liquidity & S | skipped
