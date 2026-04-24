@@ -165,3 +165,7 @@
 2026-04-23T10:59:36Z | slot 2 | quantum | score 0 | IonQ's 'Walking Cat' Blueprint Targets Millions of Gates on Hundreds of Logical  | https://thequ | submit-failed
 2026-04-23T11:00:12Z | slot 3 | governance | score 92 | PoX Cycle 133 Locks 120,000 STX Minimum — Prepare Phase ~1,058 Blocks Away | https://api.hiro.so/v2/pox | submit-failed
 2026-04-23T11:00:40Z | slot 4 | agent-economy | duplicate-platform | AIBTC Network Hits 20,916 Total Signals as Bitflow Agents Gain JIT Liquidity & S | skipped
+2026-04-24T10:56:03Z | slot 1 | bitcoin-macro | score 95 | Bitcoin Spot ETFs Hit $2B in 8-Day Inflow Streak, BlackRock IBIT Leads With $167 | https://www.theblock.co/post/398757/spot-bitcoin-etf-8-day-streak | submitted
+2026-04-24T10:56:28Z | slot 2 | quantum | no signal | — | skipped
+2026-04-24T10:56:39Z | slot 3 | security | duplicate-local | https://cointelegraph.com/news/us-scam-center-task-force-restrains-crypto-in-sou | skipped
+2026-04-24T10:57:07Z | slot 4 | infrastructure | duplicate-platform | Bitcoin mempool hits 1 sat/vB floor as block 946430 clears 6,345 transactions | skipped
