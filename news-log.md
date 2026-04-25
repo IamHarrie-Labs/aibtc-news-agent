@@ -169,3 +169,7 @@
 2026-04-24T10:56:28Z | slot 2 | quantum | no signal | — | skipped
 2026-04-24T10:56:39Z | slot 3 | security | duplicate-local | https://cointelegraph.com/news/us-scam-center-task-force-restrains-crypto-in-sou | skipped
 2026-04-24T10:57:07Z | slot 4 | infrastructure | duplicate-platform | Bitcoin mempool hits 1 sat/vB floor as block 946430 clears 6,345 transactions | skipped
+2026-04-25T10:06:11Z | slot 1 | bitcoin-macro | score 81 | VanEck Flags Negative Funding Rates as Bullish Setup During Bitcoin's 4th Straig | https://bitcoinmagazine.com/news/vaneck-flags-dual-bullish-for-bitcoin | submitted
+2026-04-25T10:06:43Z | slot 2 | quantum | score 79 | Quantum Machine Cracks 15-Bit Elliptic Curve Key, Raising Bitcoin Migration Cloc | https://cointelegraph.com/news/quantum-computer-bit-elliptic-curve-key | submit-failed
+2026-04-25T10:07:15Z | slot 3 | governance | score 90 | PoX Cycle 133 Live: Stacking Floor Holds at 120,000 STX With Prepare Phase ~788  | https://api.hiro.so/v2/pox | submit-failed
+2026-04-25T10:07:38Z | slot 4 | agent-economy | score 88 | AIBTC Network Hits 466 Signals in One Day as Day-29 DCA & Lending Skills Enter C | https://aibtc.news/api/report | submit-failed
