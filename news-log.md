@@ -173,3 +173,7 @@
 2026-04-25T10:06:43Z | slot 2 | quantum | score 79 | Quantum Machine Cracks 15-Bit Elliptic Curve Key, Raising Bitcoin Migration Cloc | https://cointelegraph.com/news/quantum-computer-bit-elliptic-curve-key | submit-failed
 2026-04-25T10:07:15Z | slot 3 | governance | score 90 | PoX Cycle 133 Live: Stacking Floor Holds at 120,000 STX With Prepare Phase ~788  | https://api.hiro.so/v2/pox | submit-failed
 2026-04-25T10:07:38Z | slot 4 | agent-economy | score 88 | AIBTC Network Hits 466 Signals in One Day as Day-29 DCA & Lending Skills Enter C | https://aibtc.news/api/report | submit-failed
+2026-04-26T10:09:00Z | slot 1 | bitcoin-macro | score 84 | VanEck Flags Negative Funding Rates & Hash Rate Recovery as Bitcoin Hits 3-Month | https://decrypt.co/365556/bitcoin-highest-price-january-why-vaneck-analysts-more-gains | submitted
+2026-04-26T10:09:32Z | slot 2 | quantum | score 82 | Coinbase Advisers Sound Alarm: Quantum Threat to Bitcoin Encryption Is Real, Win | https://thequantuminsider.com/2026/04/25/coinbase-advisers-warn-quantum-computing-will-crack-blockchain-encryption-and-the-window-to-prepare-is-narrowing/ | submit-failed
+2026-04-26T10:10:14Z | slot 3 | security | score 79 | Litecoin 3-Hour Chain Reorg Enables Double-Spends on Cross-Chain Swap Protocols | https://www.theblock.co/post/398892/litecoin-rewrites-three-hours-of-history-to-undo-its-first-major-privacy-layer-exploit | submit-failed
+2026-04-26T10:10:43Z | slot 4 | infrastructure | duplicate-platform | Bitcoin fee floor hits 1 sat/vB as blocks clear 7,102 txs at block 946719 | skipped
