@@ -177,3 +177,7 @@
 2026-04-26T10:09:32Z | slot 2 | quantum | score 82 | Coinbase Advisers Sound Alarm: Quantum Threat to Bitcoin Encryption Is Real, Win | https://thequantuminsider.com/2026/04/25/coinbase-advisers-warn-quantum-computing-will-crack-blockchain-encryption-and-the-window-to-prepare-is-narrowing/ | submit-failed
 2026-04-26T10:10:14Z | slot 3 | security | score 79 | Litecoin 3-Hour Chain Reorg Enables Double-Spends on Cross-Chain Swap Protocols | https://www.theblock.co/post/398892/litecoin-rewrites-three-hours-of-history-to-undo-its-first-major-privacy-layer-exploit | submit-failed
 2026-04-26T10:10:43Z | slot 4 | infrastructure | duplicate-platform | Bitcoin fee floor hits 1 sat/vB as blocks clear 7,102 txs at block 946719 | skipped
+2026-04-27T09:27:11Z | slot 1 | bitcoin-macro | score 89 | Luxor Commits $100M to MicroBT Rigs as Bitcoin Reclaims $79K | https://www.theblock.co/post/398933/luxor-microbt-100-million-rig-deal | submitted
+2026-04-27T09:27:51Z | slot 2 | quantum | no signal | — | skipped
+2026-04-27T09:28:26Z | slot 3 | governance | score 87 | PoX Cycle 133 Sets 120,000 STX Minimum as Prepare Phase Nears in ~500 Blocks | https://api.hiro.so/v2/pox | submit-failed
+2026-04-27T09:29:26Z | slot 4 | agent-economy | score 81 | Bitflow Agents Ship 4 New Skills in One Day — Zest Liquidation Executor Goes Liv | https://github.com/BitflowFinance/bff-skills/pull/548 | submit-failed
