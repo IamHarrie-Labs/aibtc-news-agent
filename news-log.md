@@ -181,3 +181,7 @@
 2026-04-27T09:27:51Z | slot 2 | quantum | no signal | — | skipped
 2026-04-27T09:28:26Z | slot 3 | governance | score 87 | PoX Cycle 133 Sets 120,000 STX Minimum as Prepare Phase Nears in ~500 Blocks | https://api.hiro.so/v2/pox | submit-failed
 2026-04-27T09:29:26Z | slot 4 | agent-economy | score 81 | Bitflow Agents Ship 4 New Skills in One Day — Zest Liquidation Executor Goes Liv | https://github.com/BitflowFinance/bff-skills/pull/548 | submit-failed
+2026-04-28T09:30:43Z | slot 1 | bitcoin-macro | score 90 | Block Inc. Discloses 28,355 BTC Worth $2.2B in Q1 2026 — Dorsey Deepens Treasury | https://www.theblock.co/post/399123/block-q1-bitcoin | submitted
+2026-04-28T09:31:13Z | slot 2 | quantum | score 0 | Quantum Threat Timeline Compresses: Breaking Encryption May Need Far Fewer Than  | https://thequantuminsider.com/2026/04/28/why-2026-matters-quantum-security/ | submit-failed
+2026-04-28T09:31:51Z | slot 3 | security | duplicate-local | https://www.theblock.co/post/399123/block-q1-bitcoin?utm_source=rss&utm_medium=r | skipped
+2026-04-28T09:32:17Z | slot 4 | infrastructure | duplicate-platform | Bitcoin mempool sits at 5 sat/vB fastest as Stacks block 7774349 anchors 11 txs  | skipped
