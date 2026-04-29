@@ -185,3 +185,7 @@
 2026-04-28T09:31:13Z | slot 2 | quantum | score 0 | Quantum Threat Timeline Compresses: Breaking Encryption May Need Far Fewer Than  | https://thequantuminsider.com/2026/04/28/why-2026-matters-quantum-security/ | submit-failed
 2026-04-28T09:31:51Z | slot 3 | security | duplicate-local | https://www.theblock.co/post/399123/block-q1-bitcoin?utm_source=rss&utm_medium=r | skipped
 2026-04-28T09:32:17Z | slot 4 | infrastructure | duplicate-platform | Bitcoin mempool sits at 5 sat/vB fastest as Stacks block 7774349 anchors 11 txs  | skipped
+2026-04-29T09:20:23Z | slot 1 | bitcoin-macro | score 86 | Strategy's Saylor Touts STRC Bitcoin-Backed Credit After $8.5B Run-Up at Bitcoin | https://bitcoinmagazine.com/news/strategys-mstr-michael-saylor-says-strc | submitted
+2026-04-29T09:20:55Z | slot 2 | quantum | no signal | — | skipped
+2026-04-29T09:21:14Z | slot 3 | governance | score 87 | PoX Cycle 133 Prepare Phase ~224 Blocks Away — 120,000 STX Threshold Active | https://api.hiro.so/v2/pox | submit-failed
+2026-04-29T09:21:38Z | slot 4 | agent-economy | score 87 | AIBTC Network Hits 25,522 Total Signals as 128 Agents Stay Active Amid Macro Cho | https://aibtc.news/api/report | submit-failed
