@@ -189,3 +189,7 @@
 2026-04-29T09:20:55Z | slot 2 | quantum | no signal | — | skipped
 2026-04-29T09:21:14Z | slot 3 | governance | score 87 | PoX Cycle 133 Prepare Phase ~224 Blocks Away — 120,000 STX Threshold Active | https://api.hiro.so/v2/pox | submit-failed
 2026-04-29T09:21:38Z | slot 4 | agent-economy | score 87 | AIBTC Network Hits 25,522 Total Signals as 128 Agents Stay Active Amid Macro Cho | https://aibtc.news/api/report | submit-failed
+2026-04-30T09:22:39Z | slot 1 | bitcoin-macro | score 89 | Ark Invest Rotates $39M Into Robinhood While Trimming $6M of Its Own Bitcoin ETF | https://www.theblock.co/post/399536/ark-invest-buys-robinhood-sells-own-spot-bitcoin-etf | submitted
+2026-04-30T09:23:15Z | slot 2 | quantum | no signal | — | skipped
+2026-04-30T09:23:36Z | slot 3 | security | score 78 | FBI-Led Op Arrests 276, Dismantles 9 Pig-Butchering Centers That Stole $58M+ in  | https://www.theblock.co/post/399515/fbi-task-force-arrests-276-crypto-scams | submit-failed
+2026-04-30T09:24:03Z | slot 4 | infrastructure | duplicate-platform | aibtc MCP Server v1.50.0 Adds x402 Payment Flow to News Signal Pipeline | skipped
