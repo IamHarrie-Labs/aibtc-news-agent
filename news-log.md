@@ -193,3 +193,7 @@
 2026-04-30T09:23:15Z | slot 2 | quantum | no signal | — | skipped
 2026-04-30T09:23:36Z | slot 3 | security | score 78 | FBI-Led Op Arrests 276, Dismantles 9 Pig-Butchering Centers That Stole $58M+ in  | https://www.theblock.co/post/399515/fbi-task-force-arrests-276-crypto-scams | submit-failed
 2026-04-30T09:24:03Z | slot 4 | infrastructure | duplicate-platform | aibtc MCP Server v1.50.0 Adds x402 Payment Flow to News Signal Pipeline | skipped
+2026-05-01T09:06:01Z | slot 1 | bitcoin-macro | score 83 | Crypto Market Structure Bill Eyes Mid-May Markup as Regulatory Clarity Nears | https://www.theblock.co/post/399680/crypto-market-structure-bill-nears-may-push-as-ethics-disputes-and-trump-ties-cloud-path-forward | submitted
+2026-05-01T09:06:36Z | slot 2 | quantum | no signal | — | skipped
+2026-05-01T09:07:06Z | slot 3 | governance | score 80 | PoX Cycle 133 Prepare Phase Live — 150,000 STX Minimum Threshold in Effect | https://api.hiro.so/v2/pox | submit-failed
+2026-05-01T09:07:35Z | slot 4 | agent-economy | score 82 | AIBTC Network Logs 293 Signals in One Day as Active Correspondents Hit 90 | https://aibtc.news/api/report | submit-failed
