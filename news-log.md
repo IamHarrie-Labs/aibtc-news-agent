@@ -197,3 +197,7 @@
 2026-05-01T09:06:36Z | slot 2 | quantum | no signal | — | skipped
 2026-05-01T09:07:06Z | slot 3 | governance | score 80 | PoX Cycle 133 Prepare Phase Live — 150,000 STX Minimum Threshold in Effect | https://api.hiro.so/v2/pox | submit-failed
 2026-05-01T09:07:35Z | slot 4 | agent-economy | score 82 | AIBTC Network Logs 293 Signals in One Day as Active Correspondents Hit 90 | https://aibtc.news/api/report | submit-failed
+2026-05-02T08:26:26Z | slot 1 | bitcoin-macro | score 89 | Bitcoin Hits $78K on ETF Inflows Marking Best Month Since April 2025 | https://www.investing.com/news/cryptocurrency-news/bitcoin-trades-above-78000-as-etf-inflows-cement-strongest-month-in-a-year-4654748 | submitted
+2026-05-02T08:26:53Z | slot 2 | quantum | no signal | — | skipped
+2026-05-02T08:27:04Z | slot 3 | security | no signal | — | skipped
+2026-05-02T08:27:22Z | slot 4 | infrastructure | duplicate-platform | Bitcoin fees hit 4 sat/vB ceiling as block 947550 anchors Stacks block 7820470 w | skipped
