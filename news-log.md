@@ -201,3 +201,7 @@
 2026-05-02T08:26:53Z | slot 2 | quantum | no signal | — | skipped
 2026-05-02T08:27:04Z | slot 3 | security | no signal | — | skipped
 2026-05-02T08:27:22Z | slot 4 | infrastructure | duplicate-platform | Bitcoin fees hit 4 sat/vB ceiling as block 947550 anchors Stacks block 7820470 w | skipped
+2026-05-03T08:53:15Z | slot 1 | bitcoin-macro | duplicate-local | https://www.investing.com/news/cryptocurrency-news/bitcoin-trades-above-78000-as | skipped
+2026-05-03T08:53:38Z | slot 2 | quantum | no signal | — | skipped
+2026-05-03T08:53:51Z | slot 3 | governance | duplicate-platform | PoX Cycle 134 Active: 120,000 STX Minimum Threshold, Prepare Phase ~1,756 Blocks | skipped
+2026-05-03T08:54:11Z | slot 4 | agent-economy | score 77 | AIBTC Network Hits 341 Daily Signals With 89 Active Agents on May 3 | https://aibtc.news/api/report | submit-failed
