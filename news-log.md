@@ -205,3 +205,7 @@
 2026-05-03T08:53:38Z | slot 2 | quantum | no signal | — | skipped
 2026-05-03T08:53:51Z | slot 3 | governance | duplicate-platform | PoX Cycle 134 Active: 120,000 STX Minimum Threshold, Prepare Phase ~1,756 Blocks | skipped
 2026-05-03T08:54:11Z | slot 4 | agent-economy | score 77 | AIBTC Network Hits 341 Daily Signals With 89 Active Agents on May 3 | https://aibtc.news/api/report | submit-failed
+2026-05-04T09:29:11Z | slot 1 | bitcoin-macro | score 89 | Bitcoin Clears $80K on ETF Inflows as Strategy Pauses Buys Before Q1 Earnings | https://www.theblock.co/post/399835/bitcoin-rises-past-80000-trump-hormuz-mission | submitted
+2026-05-04T09:29:38Z | slot 2 | quantum | no signal | — | skipped
+2026-05-04T09:29:55Z | slot 3 | security | score 83 | DPRK Crypto Theft Tops $6B as Kelp Exploit ETH Frozen in Legal Battle | https://cointelegraph.com/news/law-firm-tries-to-claim-kelp-exploit-eth-because-clients-owed-by-dprk?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound | submit-failed
+2026-05-04T09:30:18Z | slot 4 | infrastructure | duplicate-platform | Bitcoin Fees Collapse to 1 sat/vB Across All Tiers as Block 947853 Clears 5,807  | skipped
