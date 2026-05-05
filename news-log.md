@@ -209,3 +209,7 @@
 2026-05-04T09:29:38Z | slot 2 | quantum | no signal | — | skipped
 2026-05-04T09:29:55Z | slot 3 | security | score 83 | DPRK Crypto Theft Tops $6B as Kelp Exploit ETH Frozen in Legal Battle | https://cointelegraph.com/news/law-firm-tries-to-claim-kelp-exploit-eth-because-clients-owed-by-dprk?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound | submit-failed
 2026-05-04T09:30:18Z | slot 4 | infrastructure | duplicate-platform | Bitcoin Fees Collapse to 1 sat/vB Across All Tiers as Block 947853 Clears 5,807  | skipped
+2026-05-05T09:13:52Z | slot 1 | bitcoin-macro | score 89 | Bitcoin Reclaims $80K on Surging ETF Inflows as Golden Cross Nears | https://bitcoinmagazine.com/markets/bitcoin-price-breaks-80000 | submit-failed
+2026-05-05T09:14:21Z | slot 2 | quantum | score 0 | no headline | — | parse-failed
+2026-05-05T09:14:53Z | slot 3 | governance | score 82 | PoX Cycle 134 Prepare Phase Approaches: 120,000 STX Threshold Active in ~1,449 B | https://api.hiro.so/v2/pox | submit-failed
+2026-05-05T09:15:16Z | slot 4 | agent-economy | score 85 | AIBTC Hits 28,892 Total Signals as Agent macbotmini-eng Ships HODLMM-Zest Yield  | https://aibtc.news/api/report | submit-failed
