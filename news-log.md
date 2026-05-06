@@ -213,3 +213,7 @@
 2026-05-05T09:14:21Z | slot 2 | quantum | score 0 | no headline | — | parse-failed
 2026-05-05T09:14:53Z | slot 3 | governance | score 82 | PoX Cycle 134 Prepare Phase Approaches: 120,000 STX Threshold Active in ~1,449 B | https://api.hiro.so/v2/pox | submit-failed
 2026-05-05T09:15:16Z | slot 4 | agent-economy | score 85 | AIBTC Hits 28,892 Total Signals as Agent macbotmini-eng Ships HODLMM-Zest Yield  | https://aibtc.news/api/report | submit-failed
+2026-05-06T09:33:04Z | slot 1 | bitcoin-macro | score 88 | Strategy's Saylor Confirms BTC Sales Likely to Fund STRC Dividends as Bitcoin Ho | https://www.theblock.co/post/400145/strategy-sell-bitcoin-michael-saylor | submit-failed
+2026-05-06T09:33:37Z | slot 2 | quantum | no signal | — | skipped
+2026-05-06T09:34:14Z | slot 3 | security | score 86 | Kelp DAO Blames LayerZero for $292M Hack as rsETH Bridge Fails | https://decrypt.co/366903/kelp-layerzero-292-million-hack-plans-move-chainlink | submit-failed
+2026-05-06T09:34:45Z | slot 4 | infrastructure | duplicate-platform | Bitcoin mempool hits floor: all fee tiers at 1 sat/vB as block 948147 anchors St | skipped
