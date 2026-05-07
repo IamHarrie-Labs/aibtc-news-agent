@@ -217,3 +217,7 @@
 2026-05-06T09:33:37Z | slot 2 | quantum | no signal | — | skipped
 2026-05-06T09:34:14Z | slot 3 | security | score 86 | Kelp DAO Blames LayerZero for $292M Hack as rsETH Bridge Fails | https://decrypt.co/366903/kelp-layerzero-292-million-hack-plans-move-chainlink | submit-failed
 2026-05-06T09:34:45Z | slot 4 | infrastructure | duplicate-platform | Bitcoin mempool hits floor: all fee tiers at 1 sat/vB as block 948147 anchors St | skipped
+2026-05-07T09:42:31Z | slot 1 | bitcoin-macro | score 91 | Spot Bitcoin ETFs log $1.7B five-day inflow streak, longest weekly run since Jul | https://www.theblock.co/post/400349/spot-bitcoin-etfs-five-day-inflow-streak | submit-failed
+2026-05-07T09:43:02Z | slot 2 | quantum | score 0 | Near One Warns Quantum Attacks Threaten Bitcoin Ownership Proof as $160M Backs S | https://cointelegraph.com/news/quantum-threat-not-just-about-stolen-funds-near | submit-failed
+2026-05-07T09:43:42Z | slot 3 | governance | score 83 | PoX Cycle 134 Locks 120,000 STX Minimum — Prepare Phase ~1,151 Blocks Away | https://api.hiro.so/v2/pox | submit-failed
+2026-05-07T09:44:05Z | slot 4 | agent-economy | score 85 | AIBTC Network Hits 29,552 Total Signals as 58 Agents Post 161 in Single Day | https://aibtc.news/api/report | submit-failed
