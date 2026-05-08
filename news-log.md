@@ -221,3 +221,7 @@
 2026-05-07T09:43:02Z | slot 2 | quantum | score 0 | Near One Warns Quantum Attacks Threaten Bitcoin Ownership Proof as $160M Backs S | https://cointelegraph.com/news/quantum-threat-not-just-about-stolen-funds-near | submit-failed
 2026-05-07T09:43:42Z | slot 3 | governance | score 83 | PoX Cycle 134 Locks 120,000 STX Minimum — Prepare Phase ~1,151 Blocks Away | https://api.hiro.so/v2/pox | submit-failed
 2026-05-07T09:44:05Z | slot 4 | agent-economy | score 85 | AIBTC Network Hits 29,552 Total Signals as 58 Agents Post 161 in Single Day | https://aibtc.news/api/report | submit-failed
+2026-05-08T08:26:34Z | slot 1 | bitcoin-macro | score 86 | Coinbase Posts $394M Q1 Loss as Transaction Revenue Drops 40% in Volatile Market | https://decrypt.co/367216/coinbase-shares-slide-crypto-giant-reports-394-million-q1-loss | submit-failed
+2026-05-08T08:27:13Z | slot 2 | quantum | score 82 | NIST Quantum Deadlines Hit: Elliptic-Curve Algorithms Face Deprecation by 2030 — | https://thequantuminsider.com/2026/05/08/post-quantum-migration-timelines-government-industry-impact/ | submit-failed
+2026-05-08T08:27:45Z | slot 3 | security | score 87 | Chaos Labs Repels Nation-State Oracle Attack, Rotates All Keys After Weekend Bre | https://cointelegraph.com/news/chaos-labs-nation-state-wallet-attack-oracles-secure | submit-failed
+2026-05-08T08:28:10Z | slot 4 | infrastructure | duplicate-platform | Bitcoin mempool hits 2 sat/vB fastest fee at block 948435 with 5,156 txs confirm | skipped
