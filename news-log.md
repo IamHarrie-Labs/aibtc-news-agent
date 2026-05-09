@@ -225,3 +225,7 @@
 2026-05-08T08:27:13Z | slot 2 | quantum | score 82 | NIST Quantum Deadlines Hit: Elliptic-Curve Algorithms Face Deprecation by 2030 — | https://thequantuminsider.com/2026/05/08/post-quantum-migration-timelines-government-industry-impact/ | submit-failed
 2026-05-08T08:27:45Z | slot 3 | security | score 87 | Chaos Labs Repels Nation-State Oracle Attack, Rotates All Keys After Weekend Bre | https://cointelegraph.com/news/chaos-labs-nation-state-wallet-attack-oracles-secure | submit-failed
 2026-05-08T08:28:10Z | slot 4 | infrastructure | duplicate-platform | Bitcoin mempool hits 2 sat/vB fastest fee at block 948435 with 5,156 txs confirm | skipped
+2026-05-09T08:46:55Z | slot 1 | bitcoin-macro | score 88 | Senate Banking Committee schedules Clarity Act vote as Bitcoin clears $80,000 | https://www.theblock.co/post/400492/take-two-senate-banking-committee-sets-a-date-to-amend-and-vote-on-sweeping-crypto-legislation | submit-failed
+2026-05-09T08:47:28Z | slot 2 | quantum | no signal | — | skipped
+2026-05-09T08:47:58Z | slot 3 | governance | score 85 | PoX Cycle 134 Prepare Phase Opens in ~859 Blocks — 120,000 STX Threshold Locks I | https://api.hiro.so/v2/pox | submit-failed
+2026-05-09T08:48:28Z | slot 4 | agent-economy | score 84 | AIBTC Network Logs 39 Signals in One Day as Bitflow Patches Dog-Intelligence Age | https://aibtc.news/api/report | submit-failed
