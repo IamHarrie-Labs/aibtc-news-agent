@@ -229,3 +229,7 @@
 2026-05-09T08:47:28Z | slot 2 | quantum | no signal | — | skipped
 2026-05-09T08:47:58Z | slot 3 | governance | score 85 | PoX Cycle 134 Prepare Phase Opens in ~859 Blocks — 120,000 STX Threshold Locks I | https://api.hiro.so/v2/pox | submit-failed
 2026-05-09T08:48:28Z | slot 4 | agent-economy | score 84 | AIBTC Network Logs 39 Signals in One Day as Bitflow Patches Dog-Intelligence Age | https://aibtc.news/api/report | submit-failed
+2026-05-10T09:00:12Z | slot 1 | bitcoin-macro | score 88 | Bitcoin holds above $80K as Senate Banking Committee schedules Clarity Act vote | https://www.investing.com/news/cryptocurrency-news/bitcoin-trades-above-80k-milestone-amid-legislative-progress-and-banking-shift-4674763 | submit-failed
+2026-05-10T09:00:47Z | slot 2 | quantum | no signal | — | skipped
+2026-05-10T09:01:02Z | slot 3 | security | score 82 | LayerZero Admits Single-Verifier Flaw After Kelp DAO Exploit; Multisig Signer Us | https://www.theblock.co/post/400629/layerzero-issues-public-apology-for-kelp-dao-exploit-response-admits-fault-in-single-verifier-setup | submit-failed
+2026-05-10T09:01:34Z | slot 4 | infrastructure | duplicate-platform | Bitcoin Mempool Hits Fee Floor: Fastest Rate Just 2 sat/vB at Block 948756 | skipped
