@@ -233,3 +233,7 @@
 2026-05-10T09:00:47Z | slot 2 | quantum | no signal | — | skipped
 2026-05-10T09:01:02Z | slot 3 | security | score 82 | LayerZero Admits Single-Verifier Flaw After Kelp DAO Exploit; Multisig Signer Us | https://www.theblock.co/post/400629/layerzero-issues-public-apology-for-kelp-dao-exploit-response-admits-fault-in-single-verifier-setup | submit-failed
 2026-05-10T09:01:34Z | slot 4 | infrastructure | duplicate-platform | Bitcoin Mempool Hits Fee Floor: Fastest Rate Just 2 sat/vB at Block 948756 | skipped
+2026-05-11T10:41:41Z | slot 1 | bitcoin-macro | score 93 | Morgan Stanley's MSBT Bitcoin ETF Pulls $194M in Month One With Zero Net Outflow | https://www.theblock.co/post/400650/morgan-stanleys-bitcoin-etf-absorbs-194-million-in-first-month-with-no-net-daily-outflows | submit-failed
+2026-05-11T10:42:18Z | slot 2 | quantum | no signal | — | skipped
+2026-05-11T10:42:32Z | slot 3 | governance | duplicate-platform | PoX Cycle 134 Sets 120,000 STX Minimum — Prepare Phase ~527 Blocks Away | skipped
+2026-05-11T10:42:53Z | slot 4 | agent-economy | score 90 | AIBTC Network Hits 29,953 Total Signals as 7 Agents Stay Active on May 11 | https://aibtc.news/api/report | submit-failed
