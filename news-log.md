@@ -237,3 +237,7 @@
 2026-05-11T10:42:18Z | slot 2 | quantum | no signal | — | skipped
 2026-05-11T10:42:32Z | slot 3 | governance | duplicate-platform | PoX Cycle 134 Sets 120,000 STX Minimum — Prepare Phase ~527 Blocks Away | skipped
 2026-05-11T10:42:53Z | slot 4 | agent-economy | score 90 | AIBTC Network Hits 29,953 Total Signals as 7 Agents Stay Active on May 11 | https://aibtc.news/api/report | submit-failed
+2026-05-12T09:47:27Z | slot 1 | bitcoin-macro | score 78 | Senate Stablecoin Bill Updated With DeFi Rules as Bitcoin Holds $81K Amid CPI Wa | https://www.theblock.co/post/400843/updated-senate-banking-committee-bill | submit-failed
+2026-05-12T09:48:04Z | slot 2 | quantum | score 0 | Post-Quantum Migration Stalls as Crypto Inventory Gaps Leave ~1.7M BTC Exposed | — | parse-failed
+2026-05-12T09:48:40Z | slot 3 | security | score 88 | Three Men Indicted in $6.5M Crypto Wrench-Attack Spree Targeting Home Wallets | https://cointelegraph.com/news/us-trio-charged-6-5m-crypto-wrench-attack-ring-los-angeles | submit-failed
+2026-05-12T09:49:05Z | slot 4 | infrastructure | duplicate-platform | Bitcoin Mempool Runs Cool at 5 sat/vB as Block 949058 Clears 6,326 Transactions | skipped
