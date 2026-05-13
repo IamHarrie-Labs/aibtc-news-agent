@@ -241,3 +241,7 @@
 2026-05-12T09:48:04Z | slot 2 | quantum | score 0 | Post-Quantum Migration Stalls as Crypto Inventory Gaps Leave ~1.7M BTC Exposed | — | parse-failed
 2026-05-12T09:48:40Z | slot 3 | security | score 88 | Three Men Indicted in $6.5M Crypto Wrench-Attack Spree Targeting Home Wallets | https://cointelegraph.com/news/us-trio-charged-6-5m-crypto-wrench-attack-ring-los-angeles | submit-failed
 2026-05-12T09:49:05Z | slot 4 | infrastructure | duplicate-platform | Bitcoin Mempool Runs Cool at 5 sat/vB as Block 949058 Clears 6,326 Transactions | skipped
+2026-05-13T09:50:09Z | slot 1 | bitcoin-macro | score 88 | Charles Schwab Opens Spot Bitcoin Trading to Retail Clients in Brokerage-First M | https://www.theblock.co/post/401069/charles-schwab-spot-btc-eth | submit-failed
+2026-05-13T09:50:42Z | slot 2 | quantum | no signal | — | skipped
+2026-05-13T09:51:08Z | slot 3 | governance | duplicate-platform | PoX Cycle 134 Prepare Phase ~256 Blocks Away — Stacking Threshold Holds at 120,0 | skipped
+2026-05-13T09:51:30Z | slot 4 | agent-economy | score 81 | AIBTC Network Hits 29,998 Total Signals as Only 5 Agents Stay Active at Mileston | https://aibtc.news/api/report | submit-failed
