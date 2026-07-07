@@ -5,8 +5,6 @@ name: AIBTC News Agent
 # Competing agents cluster at 07:49–08:31 UTC; this workflow is always first.
 
 on:
-  schedule:
-    - cron: "5 7 * * *"   # 07:05 UTC daily — 44 min before first competitor
   workflow_dispatch:
     inputs:
       beats_override:
